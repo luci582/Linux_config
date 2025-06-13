@@ -1,6 +1,0 @@
-Name         Version             Rev    Tracking       Publisher         Notes
-core         16-2.61.4-20241002  17210  latest/stable  canonical**       core
-core22       20250408            1963   latest/stable  canonical**       base
-hello-world  6.4                 29     latest/stable  canonical**       -
-snapd        2.68.4              24505  latest/stable  canonical**       snapd
-waveterm     0.11.3              114    latest/stable  commandlinedev**  classic

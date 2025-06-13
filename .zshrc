@@ -15,7 +15,7 @@ export ZSH="$HOME/.oh-my-zsh"
 # load a random theme each time Oh My Zsh is loaded, in which case,
 # to know which specific one was loaded, run: echo $RANDOM_THEME
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-ZSH_THEME="robbyrussell"
+ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # Set list of themes to pick from when loading at random
 # Setting this variable when ZSH_THEME=random will cause zsh to load
@@ -78,7 +78,6 @@ ZSH_THEME="robbyrussell"
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
-
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
@@ -109,20 +108,28 @@ source $ZSH/oh-my-zsh.sh
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
-source ~/powerlevel10k/powerlevel10k.zsh-theme
+# source ~/powerlevel10k/powerlevel10k.zsh-theme
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-# Aliases
+
+
+# Aliases 
 alias ff="fzf --style full --preview 'fzf-preview.sh {}' --bind 'focus:transform-header:file --brief {}'"
-alias ls='eza $eza_params'
-alias l='eza --git-ignore $eza_params'
-alias ll='eza --all --header --long $eza_params'
-alias llm='eza --all --header --long --sort=modified $eza_params'
-alias la='eza -lbhHigUmuSa'
-alias lx='eza -lbhHigUmuSa@'
-alias lt='eza --tree $eza_params'
-alias tree='eza --tree $eza_params'
+alias ls='eza $eza_params --icons'
+alias l='eza --git-ignore --icons $eza_params'
+alias ll='eza --all --header --long --icons $eza_params'
+alias llm='eza --all --header --long --sort=modified --icons $eza_params'
+alias la='eza -lbhHigUmuSa --icons'
+alias lx='eza -lbhHigUmuSa@ --icons'
+alias lt='eza --tree $eza_params --icons'
+alias tree='eza --tree $eza_params --icons'
+alias cat='batcat'
+alias vim='nvim'
+alias update='sudo apt update -y && sudo apt full-upgrade -y && sudo apt autoremove --purge -y && sudo apt clean'
+alias cpupower='batcat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor' 
+
+export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=ffff5f,bold,underline"

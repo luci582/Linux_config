@@ -130,6 +130,10 @@ alias cat='batcat'
 alias vim='nvim'
 alias update='sudo apt update -y && sudo apt full-upgrade -y && sudo apt autoremove --purge -y && sudo apt clean'
 alias cpupower='batcat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor' 
+alias saveme='sudo cpufreq-set -g powersave'
+alias fullp='sudo cpufreq-set -g performance'
 
 export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
+export PATH="$PATH:/opt/android-studio/bin"
+
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=ffff5f,bold,underline"

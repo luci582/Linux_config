@@ -70,19 +70,8 @@ install_snap_packages() {
     print_header "Installing Snap Packages"
     sudo snap install --classic waveterm
     sudo snap install obsidian --classic
+    snap install ghostty --classic
 }
-
-# --- NEW FUNCTION for Ghostty Installation ---
-install_ghostty() {
-    print_header "Installing Ghostty Terminal"
-    # Add Ghostty's official repository and key
-    sudo curl -sL https://apt.ghostty.org/public.key | sudo gpg --dearmor -o /usr/share/keyrings/ghostty-archive-keyring.gpg
-    echo "deb [signed-by=/usr/share/keyrings/ghostty-archive-keyring.gpg] https://apt.ghostty.org/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/ghostty.list > /dev/null
-    # Update package list and install ghostty
-    sudo apt update
-    sudo apt install -y ghostty
-}
-
 install_neovim() {
     print_header "Installing latest Neovim AppImage"
     mkdir -p "$HOME/Downloads"
@@ -137,6 +126,7 @@ copy_dotfiles() {
     cp -f .zshrc ~
     cp -f .tmux.conf ~
     cp -f .p10k.zsh ~
+    cp -f config ~/.config/ghostty
 }
 
 install_nerd_fonts() {
@@ -169,7 +159,6 @@ main_menu() {
         echo "5. Install Neovim & NvChad"
         echo "6. Install Nerd Fonts Only"
         echo "7. Copy Dotfiles Only"
-        echo "8. Install Extra Apps (Ghostty & Obsidian)"
         echo "q. Quit"
         printf "%bChoose an option: %b" "${C_YELLOW}" "${C_DEFAULT}"
         read -r choice
@@ -182,39 +171,6 @@ main_menu() {
                 setup_rust
                 setup_openvpn
                 install_snap_packages
-                install_ghostty
-                install_neovim
-                clone_git_repos
-                setup_zsh
-                setup_nvchad
-                copy_dotfiles
-                install_nerd_fonts
-                cleanup
-                echo -e "\n${C_GREEN}${C_BOLD}Full installation complete!${C_DEFAULT}"
-                ;;
-            2)
-                update_system
-                ;;
-            3)
-                install_core_tools
-                ;;
-            4)
-                setup_zsh
-                ;;
-            5)
-                purge_old_editors
-                install_neovim
-                setup_nvchad
-                ;;
-            6)
-                install_nerd_fonts
-                ;;
-            7)
-                copy_dotfiles
-                ;;
-            8)
-                install_snap_packages
-                install_ghostty
                 ;;
             q|Q)
                 echo "Exiting."

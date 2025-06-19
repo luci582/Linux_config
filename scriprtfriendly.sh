@@ -200,7 +200,6 @@ main_menu() {
             7)
                 copy_dotfiles
                 ;;
-            8)
             q|Q)
                 echo "Exiting."
                 exit 0

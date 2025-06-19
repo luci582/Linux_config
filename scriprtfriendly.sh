@@ -171,7 +171,36 @@ main_menu() {
                 setup_rust
                 setup_openvpn
                 install_snap_packages
+                install_neovim
+                clone_git_repos
+                setup_zsh
+                setup_nvchad
+                copy_dotfiles
+                install_nerd_fonts
+                cleanup
+                echo -e "\n${C_GREEN}${C_BOLD}Full installation complete!${C_DEFAULT}"
                 ;;
+            2)
+                update_system
+                ;;
+            3)
+                install_core_tools
+                ;;
+            4)
+                setup_zsh
+                ;;
+            5)
+                purge_old_editors
+                install_neovim
+                setup_nvchad
+                ;;
+            6)
+                install_nerd_fonts
+                ;;
+            7)
+                copy_dotfiles
+                ;;
+            8)
             q|Q)
                 echo "Exiting."
                 exit 0

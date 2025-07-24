@@ -35,7 +35,7 @@
     os_icon                 # os identifier
     dir                     # current directory
     vcs                     # git status
-    public_ip             # public IP address
+#    public_ip             # public IP address
     # proxy                 # system-wide http/https/ftp proxy
     battery               # internal battery
     # =========================[ Line #2 ]=========================

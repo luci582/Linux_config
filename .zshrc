@@ -8,6 +8,16 @@ fi
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
 
+mkdir() {
+    # Check if the current directory is ~/job and only one argument is given
+    if [[ "$(pwd)" == "$HOME/jobs/Job name" && "$#" -eq 1 ]]; then
+        # Use the 'command' prefix to call the original mkdir command
+        command mkdir -v "$1" && command mkdir -v "$1/cv" "$1/coverletter" "$1/jobdiscretion"
+    else
+        # If not in ~/job or with different arguments, use the original mkdir
+        command mkdir "$@"
+    fi
+}
 # Path to your Oh My Zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
@@ -83,7 +93,7 @@ source $ZSH/oh-my-zsh.sh
 # User configuration
 
 # export MANPATH="/usr/local/man:$MANPATH"
-
+export texlive=/usr/local/texlive/2025/bin/x86_64-linux
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
 
@@ -137,3 +147,9 @@ export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
 export PATH="$PATH:/opt/android-studio/bin"
 
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=ffff5f,bold,underline"
+# alias vmstart='sudo systemctl start vmware.service vmware-USBArbitrator.service'
+# alias vmstop='sudo systemctl stop vmware.service vmware-USBArbitrator.service'
+
+# Generated for envman. Do not edit.
+[ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
+export PATH=$PATH:/usr/games

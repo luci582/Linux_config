@@ -155,7 +155,7 @@ alias saveme='sudo cpufreq-set -g powersave'
 alias fullp='sudo cpufreq-set -g performance'
 
 export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
-export PATH="$PATH:/opt/android-studio/bin"
+# export PATH="$PATH:/opt/android-studio/bin"
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=#ff00ff,bg=cyan,bold,underline"
 # alias vmstart='sudo systemctl start vmware.service vmware-USBArbitrator.service'
 # alias vmstop='sudo systemctl stop vmware.service vmware-USBArbitrator.service'

@@ -33,14 +33,14 @@ die() {
 
 # Check if running as root
 check_not_root() {
-    if [[ $EUID -eq 0 ]]; then
+    if [ "$(id -u)" -eq 0 ]; then
         die "This script should not be run as root. Please run as a regular user."
     fi
 }
 
 # Check if system is Debian/Ubuntu based
 check_debian_ubuntu() {
-    if [[ ! -f /etc/debian_version ]]; then
+    if [ ! -f /etc/debian_version ]; then
         die "This script is designed for Debian/Ubuntu systems only."
     fi
 }
@@ -50,7 +50,10 @@ confirm() {
     local prompt="${1:-Continue?}"
     printf "%b%s [y/N]: %b" "${C_YELLOW}" "$prompt" "${C_DEFAULT}"
     read -r response
-    [[ "$response" =~ ^[Yy]$ ]]
+    case "$response" in
+        [Yy]|[Yy][Ee][Ss]) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 # Check if required commands are available
@@ -144,7 +147,7 @@ setup_rust() {
     
     # Make Cargo persistent for new shells - check both .zshrc and .bashrc efficiently
     for rc_file in ~/.zshrc ~/.bashrc; do
-        if [[ -f "$rc_file" ]] && ! grep -q 'export PATH="$HOME/.cargo/bin:$PATH"' "$rc_file" 2>/dev/null; then
+        if [ -f "$rc_file" ] && ! grep -q 'export PATH="$HOME/.cargo/bin:$PATH"' "$rc_file" 2>/dev/null; then
             {
                 echo
                 echo "# Add Cargo to PATH"
@@ -180,7 +183,7 @@ install_docker() {
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     
     # Add Docker repository (works for both Ubuntu and Debian)
-    if [[ -f /etc/debian_version ]]; then
+    if [ -f /etc/debian_version ]; then
         # For Debian-based systems
         if grep -q "Ubuntu" /etc/os-release; then
             # Ubuntu
@@ -256,7 +259,7 @@ install_neovim() {
     sudo rm -rf /opt/neovim
     
     # Clone or update Neovim repository
-    if [[ -d "$HOME/Downloads/neovim" ]]; then
+    if [ -d "$HOME/Downloads/neovim" ]; then
         printf "%bUpdating existing Neovim repository...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         cd "$HOME/Downloads/neovim"
         git fetch --all
@@ -282,7 +285,7 @@ install_neovim() {
     
     # Also add to current user's shell configs
     for rc_file in ~/.zshrc ~/.bashrc; do
-        if [[ -f "$rc_file" ]] && ! grep -q '/opt/neovim/bin' "$rc_file" 2>/dev/null; then
+        if [ -f "$rc_file" ] && ! grep -q '/opt/neovim/bin' "$rc_file" 2>/dev/null; then
             echo 'export PATH="$PATH:/opt/neovim/bin"' >> "$rc_file"
         fi
     done
@@ -353,7 +356,7 @@ setup_zsh() {
     wait
     
     # Change default shell to zsh
-    if [[ "$SHELL" != */zsh ]]; then
+    if [ "$SHELL" != *zsh ]; then
         printf "%bChanging default shell to zsh...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         chsh -s "$(which zsh)" || {
             printf "%bCouldn't change default shell automatically. Please run: chsh -s \$(which zsh)%b\n" "${C_YELLOW}" "${C_DEFAULT}"

@@ -55,18 +55,22 @@ confirm() {
 
 # Check if required commands are available
 check_dependencies() {
-    local deps=("curl" "git" "sudo")
-    local missing=()
+    local deps="curl git sudo"
+    local missing=""
     
-    for dep in "${deps[@]}"; do
+    for dep in $deps; do
         if ! command -v "$dep" >/dev/null 2>&1; then
-            missing+=("$dep")
+            if [ -z "$missing" ]; then
+                missing="$dep"
+            else
+                missing="$missing $dep"
+            fi
         fi
     done
     
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        printf "%bMissing required dependencies: %s%b\n" "${C_RED}" "${missing[*]}" "${C_DEFAULT}"
-        printf "%bPlease install them first: sudo apt update && sudo apt install -y %s%b\n" "${C_YELLOW}" "${missing[*]}" "${C_DEFAULT}"
+    if [ -n "$missing" ]; then
+        printf "%bMissing required dependencies: %s%b\n" "${C_RED}" "$missing" "${C_DEFAULT}"
+        printf "%bPlease install them first: sudo apt update && sudo apt install -y %s%b\n" "${C_YELLOW}" "$missing" "${C_DEFAULT}"
         return 1
     fi
     return 0
@@ -210,16 +214,15 @@ install_snap_packages() {
         sleep 5
     fi
     
-    # Array of snap packages to install
-    declare -a snap_packages=(
-        "waveterm --classic"
-        "obsidian --classic" 
-        "code --classic"
-        "discord"
-    )
+    # List of snap packages to install
+    snap_packages="waveterm --classic
+obsidian --classic
+code --classic
+discord"
     
     # Install packages efficiently
-    for package in "${snap_packages[@]}"; do
+    echo "$snap_packages" | while IFS= read -r package; do
+        [ -z "$package" ] && continue
         package_name=$(echo "$package" | awk '{print $1}')
         if ! snap list 2>/dev/null | grep -q "^$package_name "; then
             printf "%bInstalling snap package: %s%b\n" "${C_YELLOW}" "$package_name" "${C_DEFAULT}"
@@ -316,21 +319,27 @@ setup_zsh() {
     # Install Zsh plugins in parallel for efficiency
     ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
     
-    declare -A zsh_plugins=(
-        ["zsh-autosuggestions"]="https://github.com/zsh-users/zsh-autosuggestions"
-        ["zsh-syntax-highlighting"]="https://github.com/zsh-users/zsh-syntax-highlighting.git"
-        ["zsh-completions"]="https://github.com/zsh-users/zsh-completions"
-    )
+    # Install plugins manually for better compatibility
+    if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]; then
+        printf "%bInstalling zsh plugin: zsh-autosuggestions%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        git clone --depth=1 "https://github.com/zsh-users/zsh-autosuggestions" "$ZSH_CUSTOM/plugins/zsh-autosuggestions" &
+    else
+        printf "%bzsh-autosuggestions already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    fi
     
-    # Install plugins
-    for plugin in "${!zsh_plugins[@]}"; do
-        if [ ! -d "$ZSH_CUSTOM/plugins/$plugin" ]; then
-            printf "%bInstalling zsh plugin: %s%b\n" "${C_YELLOW}" "$plugin" "${C_DEFAULT}"
-            git clone --depth=1 "${zsh_plugins[$plugin]}" "$ZSH_CUSTOM/plugins/$plugin" &
-        else
-            printf "%b%s already installed%b\n" "${C_GREEN}" "$plugin" "${C_DEFAULT}"
-        fi
-    done
+    if [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" ]; then
+        printf "%bInstalling zsh plugin: zsh-syntax-highlighting%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        git clone --depth=1 "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" &
+    else
+        printf "%bzsh-syntax-highlighting already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    fi
+    
+    if [ ! -d "$ZSH_CUSTOM/plugins/zsh-completions" ]; then
+        printf "%bInstalling zsh plugin: zsh-completions%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        git clone --depth=1 "https://github.com/zsh-users/zsh-completions" "$ZSH_CUSTOM/plugins/zsh-completions" &
+    else
+        printf "%bzsh-completions already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    fi
     
     # Install Powerlevel10k theme
     if [ ! -d "$ZSH_CUSTOM/themes/powerlevel10k" ]; then
@@ -367,27 +376,21 @@ copy_dotfiles() {
     print_header "Copying Local Configuration Files"
     
     # Get the script directory
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
     
-    # Array of dotfiles to copy
-    declare -A dotfiles=(
-        [".zshrc"]="$HOME/.zshrc"
-        [".tmux.conf"]="$HOME/.tmux.conf"
-        [".p10k.zsh"]="$HOME/.p10k.zsh"
-        ["config"]="$HOME/.config/ghostty/config"
-    )
-    
-    for source_file in "${!dotfiles[@]}"; do
-        target_file="${dotfiles[$source_file]}"
-        source_path="$script_dir/$source_file"
+    # Copy dotfiles individually for better compatibility
+    copy_dotfile() {
+        local source_file="$1"
+        local target_file="$2"
+        local source_path="$script_dir/$source_file"
         
-        if [[ -f "$source_path" ]]; then
+        if [ -f "$source_path" ]; then
             # Create target directory if needed
             target_dir="$(dirname "$target_file")"
             mkdir -p "$target_dir"
             
             # Backup existing file if it exists
-            if [[ -f "$target_file" ]]; then
+            if [ -f "$target_file" ]; then
                 cp "$target_file" "$target_file.bak.$(date +%s)"
                 printf "%bBacked up existing %s%b\n" "${C_YELLOW}" "$source_file" "${C_DEFAULT}"
             fi
@@ -397,7 +400,13 @@ copy_dotfiles() {
         else
             printf "%bWarning: %s not found in script directory%b\n" "${C_YELLOW}" "$source_file" "${C_DEFAULT}"
         fi
-    done
+    }
+    
+    # Copy each dotfile
+    copy_dotfile ".zshrc" "$HOME/.zshrc"
+    copy_dotfile ".tmux.conf" "$HOME/.tmux.conf"
+    copy_dotfile ".p10k.zsh" "$HOME/.p10k.zsh"
+    copy_dotfile "config" "$HOME/.config/ghostty/config"
 }
 
 install_nerd_fonts() {
@@ -413,20 +422,19 @@ install_nerd_fonts() {
     
     mkdir -p "$HOME/.local/share/fonts"
     
-    # Download font files efficiently using array and parallel downloads
-    font_files=(
-        "MesloLGS%20NF%20Regular.ttf"
-        "MesloLGS%20NF%20Bold.ttf"
-        "MesloLGS%20NF%20Italic.ttf"
-        "MesloLGS%20NF%20Bold%20Italic.ttf"
-    )
+    # Download font files efficiently using list and parallel downloads
+    font_files="MesloLGS%20NF%20Regular.ttf
+MesloLGS%20NF%20Bold.ttf
+MesloLGS%20NF%20Italic.ttf
+MesloLGS%20NF%20Bold%20Italic.ttf"
     
     base_url="https://github.com/romkatv/powerlevel10k-media/raw/master"
     
     # Download fonts in parallel for faster installation
-    for font in "${font_files[@]}"; do
+    echo "$font_files" | while IFS= read -r font; do
+        [ -z "$font" ] && continue
         font_name=$(echo "$font" | sed 's/%20/ /g')
-        if [[ ! -f "$HOME/.local/share/fonts/$font_name" ]]; then
+        if [ ! -f "$HOME/.local/share/fonts/$font_name" ]; then
             printf "%bDownloading %s...%b\n" "${C_YELLOW}" "$font_name" "${C_DEFAULT}"
             (curl -fLo "$HOME/.local/share/fonts/$font_name" "$base_url/$font" && \
              printf "%bDownloaded %s successfully%b\n" "${C_GREEN}" "$font_name" "${C_DEFAULT}") || \
@@ -447,14 +455,10 @@ install_nerd_fonts() {
 
 cleanup() {
     print_header "Cleaning Up Downloaded Files"
-    files_to_clean=(
-        "$HOME/Downloads/nerd-fonts"
-        "$HOME/Downloads/nvim-linux-x86_64.tar.gz"
-        "$HOME/Downloads/neovim"
-    )
     
-    for file in "${files_to_clean[@]}"; do
-        if [[ -e "$file" ]]; then
+    # Clean up files individually
+    for file in "$HOME/Downloads/nerd-fonts" "$HOME/Downloads/nvim-linux-x86_64.tar.gz" "$HOME/Downloads/neovim"; do
+        if [ -e "$file" ]; then
             if confirm "Remove $file?"; then
                 rm -rf "$file"
                 printf "%bRemoved %s%b\n" "${C_GREEN}" "$file" "${C_DEFAULT}"

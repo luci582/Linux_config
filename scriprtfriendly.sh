@@ -103,7 +103,7 @@ install_core_tools() {
     sudo apt install -y \
         tmux zsh flameshot snapd bat btop \
         htop neofetch autojump thefuck fzf \
-        cpufrequtils openssh-client openssh-server \
+        cpufrequtils \
         freerdp2-x11
     
     # Install Neovim build dependencies
@@ -206,6 +206,25 @@ install_docker() {
     sudo systemctl start docker
     
     printf "%bDocker installed successfully. You may need to log out and back in to use Docker without sudo.%b\n" "${C_GREEN}" "${C_DEFAULT}"
+}
+
+install_ssh_server() {
+    print_header "Installing SSH Server (optional)"
+    if confirm "Do you want to install SSH server? This may require resolving package conflicts."; then
+        printf "%bAttempting to install SSH server...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        # Try to install openssh-server, and if it fails due to version conflicts,
+        # provide instructions to the user
+        if ! sudo apt install -y openssh-server; then
+            printf "%b%sSSH server installation failed due to package conflicts.%b\n" "${C_RED}${C_BOLD}" "" "${C_DEFAULT}"
+            printf "%bTo resolve this manually, you can try:%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+            printf "  sudo apt remove openssh-client\n"
+            printf "  sudo apt install openssh-server\n"
+            printf "  sudo apt install openssh-client\n"
+            printf "%bOr check your package sources for version conflicts.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        else
+            printf "%bSSH server installed successfully%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        fi
+    fi
 }
 
 install_snap_packages() {
@@ -492,6 +511,7 @@ main_menu() {
         echo "8. Setup Rust Environment"
         echo "9. Install OpenVPN3"
         echo "10. Install Docker"
+        echo "11. Install SSH Server"
         echo "s. Show System Information"
         echo "q. Quit"
         printf "%bChoose an option: %b" "${C_YELLOW}" "${C_DEFAULT}"
@@ -527,6 +547,7 @@ main_menu() {
             8) setup_rust ;;
             9) setup_openvpn ;;
             10) install_docker ;;
+            11) install_ssh_server ;;
             s|S)
                 printf "\n%b--- System Information ---%b\n" "${C_BLUE}${C_BOLD}" "${C_DEFAULT}"
                 printf "%bOS: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$(lsb_release -d 2>/dev/null | cut -f2 || echo 'Unknown')"

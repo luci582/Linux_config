@@ -48,6 +48,25 @@ confirm() {
     [[ "$response" =~ ^[Yy]$ ]]
 }
 
+# Check if required commands are available
+check_dependencies() {
+    local deps=("curl" "git" "sudo")
+    local missing=()
+    
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" >/dev/null 2>&1; then
+            missing+=("$dep")
+        fi
+    done
+    
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        printf "%bMissing required dependencies: %s%b\n" "${C_RED}" "${missing[*]}" "${C_DEFAULT}"
+        printf "%bPlease install them first: sudo apt update && sudo apt install -y %s%b\n" "${C_YELLOW}" "${missing[*]}" "${C_DEFAULT}"
+        return 1
+    fi
+    return 0
+}
+
 # --- Installation and Setup Functions ---
 
 update_system() {
@@ -60,13 +79,26 @@ update_system() {
 
 install_core_tools() {
     print_header "Installing Core Packages & Tools"
-    # Note: apt-transport-https is no longer needed for modern Ubuntu/Debian versions
+    # Install packages in groups for better efficiency
+    printf "%bInstalling essential development tools...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
     sudo apt install -y \
         curl git wget gpg ca-certificates \
-        virtualbox tmux zsh flameshot \
-        snapd bat btop freerdp2-x11 lsb-release \
-        build-essential software-properties-common \
-        unzip tree htop neofetch
+        build-essential cmake pkg-config \
+        software-properties-common unzip tree \
+        lsb-release
+    
+    printf "%bInstalling terminal and productivity tools...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    sudo apt install -y \
+        tmux zsh flameshot snapd bat btop \
+        htop neofetch autojump thefuck fzf \
+        cpufrequtils openssh-client openssh-server \
+        freerdp2-x11
+    
+    # Install Neovim build dependencies
+    printf "%bInstalling Neovim build dependencies...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    sudo apt install -y \
+        ninja-build gettext cmake unzip curl \
+        build-essential
 }
 
 purge_old_editors() {
@@ -79,11 +111,11 @@ setup_rust() {
     print_header "Installing Rust and Cargo Packages"
     if ! command -v rustup >/dev/null 2>&1; then
         printf "%bInstalling Rust via rustup...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
         printf "%bRust installation completed%b\n" "${C_GREEN}" "${C_DEFAULT}"
     else
         printf "%bRust is already installed, updating...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        rustup update
+        rustup update stable
     fi
     
     # Source the cargo env to use it immediately in this script session.
@@ -96,16 +128,19 @@ setup_rust() {
     # Install eza if not already installed
     if ! cargo install --list | grep -q '^eza '; then
         printf "%bInstalling eza (modern ls replacement)...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        cargo install eza
+        cargo install eza --locked
     else
         printf "%beza is already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
     fi
     
-    # Make Cargo persistent for new shells - check both .zshrc and .bashrc
+    # Make Cargo persistent for new shells - check both .zshrc and .bashrc efficiently
     for rc_file in ~/.zshrc ~/.bashrc; do
         if [[ -f "$rc_file" ]] && ! grep -q 'export PATH="$HOME/.cargo/bin:$PATH"' "$rc_file" 2>/dev/null; then
-            echo -e "\n# Add Cargo to PATH" >> "$rc_file"
-            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$rc_file"
+            {
+                echo
+                echo "# Add Cargo to PATH"
+                echo 'export PATH="$HOME/.cargo/bin:$PATH"'
+            } >> "$rc_file"
             printf "%bRust/Cargo PATH added to %s%b\n" "${C_GREEN}" "$(basename "$rc_file")" "${C_DEFAULT}"
         fi
     done
@@ -120,6 +155,45 @@ setup_openvpn() {
     echo "deb [signed-by=/etc/apt/keyrings/openvpn.asc] https://packages.openvpn.net/openvpn3/debian $codename main" | sudo tee /etc/apt/sources.list.d/openvpn3.list > /dev/null
     sudo apt update
     sudo apt install -y openvpn3 || sudo apt install -y openvpn
+}
+
+install_docker() {
+    print_header "Installing Docker"
+    # Remove any old Docker installations
+    sudo apt remove -y docker docker-engine docker.io containerd runc || true
+    
+    # Update package index and install prerequisites
+    sudo apt update
+    sudo apt install -y ca-certificates curl gnupg lsb-release
+    
+    # Add Docker GPG key
+    sudo mkdir -p /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    
+    # Add Docker repository (works for both Ubuntu and Debian)
+    if [[ -f /etc/debian_version ]]; then
+        # For Debian-based systems
+        if grep -q "Ubuntu" /etc/os-release; then
+            # Ubuntu
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        else
+            # Debian
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        fi
+    fi
+    
+    # Install Docker
+    sudo apt update
+    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # Add current user to docker group
+    sudo usermod -aG docker "$USER"
+    
+    # Enable and start Docker service
+    sudo systemctl enable docker
+    sudo systemctl start docker
+    
+    printf "%bDocker installed successfully. You may need to log out and back in to use Docker without sudo.%b\n" "${C_GREEN}" "${C_DEFAULT}"
 }
 
 install_snap_packages() {
@@ -139,51 +213,74 @@ install_snap_packages() {
         "discord"
     )
     
+    # Install packages efficiently
     for package in "${snap_packages[@]}"; do
         package_name=$(echo "$package" | awk '{print $1}')
-        if ! snap list | grep -q "^$package_name "; then
+        if ! snap list 2>/dev/null | grep -q "^$package_name "; then
             printf "%bInstalling snap package: %s%b\n" "${C_YELLOW}" "$package_name" "${C_DEFAULT}"
             # shellcheck disable=SC2086
-            sudo snap install $package || printf "%bFailed to install %s%b\n" "${C_RED}" "$package_name" "${C_DEFAULT}"
+            if sudo snap install $package; then
+                printf "%b%s installed successfully%b\n" "${C_GREEN}" "$package_name" "${C_DEFAULT}"
+            else
+                printf "%bFailed to install %s%b\n" "${C_RED}" "$package_name" "${C_DEFAULT}"
+            fi
         else
             printf "%b%s is already installed%b\n" "${C_GREEN}" "$package_name" "${C_DEFAULT}"
         fi
     done
 }
 install_neovim() {
-    print_header "Installing latest Neovim"
+    print_header "Building and Installing Latest Neovim from Source"
     
     # Check if neovim is already installed and get version
     if command -v nvim >/dev/null 2>&1; then
         current_version=$(nvim --version | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
         printf "%bCurrent Neovim version: %s%b\n" "${C_YELLOW}" "$current_version" "${C_DEFAULT}"
+        
+        if confirm "Neovim is already installed. Do you want to rebuild from source?"; then
+            printf "%bProceeding with Neovim build...%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        else
+            return
+        fi
     fi
     
-    mkdir -p "$HOME/Downloads"
-    printf "%bDownloading latest Neovim...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    # Remove old installation
+    sudo rm -rf /opt/neovim
     
-    if ! curl -L "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" -o "$HOME/Downloads/nvim-linux-x86_64.tar.gz"; then
-        die "Failed to download Neovim"
+    # Clone or update Neovim repository
+    if [[ -d "$HOME/Downloads/neovim" ]]; then
+        printf "%bUpdating existing Neovim repository...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        cd "$HOME/Downloads/neovim"
+        git fetch --all
+        git reset --hard origin/stable
+    else
+        printf "%bCloning Neovim repository...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        mkdir -p "$HOME/Downloads"
+        cd "$HOME/Downloads"
+        git clone --depth=1 --branch=stable https://github.com/neovim/neovim.git
+        cd neovim
     fi
     
-    printf "%bInstalling Neovim to /opt/nvim-linux64...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-    sudo rm -rf /opt/nvim-linux64
-    sudo tar -C /opt -xzf "$HOME/Downloads/nvim-linux-x86_64.tar.gz"
+    # Build Neovim
+    printf "%bBuilding Neovim (this may take a few minutes)...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX=/opt/neovim
     
-    # Make Neovim available system-wide for all users.
-    sudo tee /etc/profile.d/nvim.sh > /dev/null << 'EOF'
-# Add Neovim to PATH
-export PATH="$PATH:/opt/nvim-linux64/bin"
-EOF
+    # Install Neovim
+    printf "%bInstalling Neovim to /opt/neovim...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    sudo make install
+    
+    # Create symlink for system-wide access
+    sudo ln -sf /opt/neovim/bin/nvim /usr/local/bin/nvim
     
     # Also add to current user's shell configs
     for rc_file in ~/.zshrc ~/.bashrc; do
-        if [[ -f "$rc_file" ]] && ! grep -q '/opt/nvim-linux64/bin' "$rc_file" 2>/dev/null; then
-            echo 'export PATH="$PATH:/opt/nvim-linux64/bin"' >> "$rc_file"
+        if [[ -f "$rc_file" ]] && ! grep -q '/opt/neovim/bin' "$rc_file" 2>/dev/null; then
+            echo 'export PATH="$PATH:/opt/neovim/bin"' >> "$rc_file"
         fi
     done
     
-    printf "%bNeovim installed successfully. You may need to restart your terminal.%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    printf "%bNeovim built and installed successfully!%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    /opt/neovim/bin/nvim --version | head -n1
 }
 
 clone_git_repos() {
@@ -193,32 +290,15 @@ clone_git_repos() {
     if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
         printf "%bCloning TPM (Tmux Plugin Manager)...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         mkdir -p "$HOME/.tmux/plugins"
-        git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+        git clone --depth=1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+        printf "%bTPM installed successfully%b\n" "${C_GREEN}" "${C_DEFAULT}"
     else
         printf "%bTPM directory already exists, skipping clone.%b\n" "${C_GREEN}" "${C_DEFAULT}"
-    fi
-    
-    # PEAS (Privilege Escalation Awesome Scripts) - Optional
-    printf "%bDo you want to install PEAS (Privilege Escalation Scripts)? [y/N]: %b" "${C_YELLOW}" "${C_DEFAULT}"
-    read -r install_peas
-    if [[ "$install_peas" =~ ^[Yy]$ ]]; then
-        if [ ! -d "$HOME/PEAS" ]; then
-            printf "%bCloning PEAS...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-            git clone https://github.com/carlospolop/privilege-escalation-awesome-scripts-suite.git "$HOME/PEAS"
-        else
-            printf "%bPEAS directory already exists, skipping clone.%b\n" "${C_GREEN}" "${C_DEFAULT}"
-        fi
     fi
 }
 
 setup_zsh() {
     print_header "Setting up Zsh, Oh My Zsh, and Powerlevel10k"
-    
-    # Make zsh the default shell
-    if [[ "$SHELL" != */zsh ]]; then
-        printf "%bSetting zsh as default shell...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        chsh -s "$(which zsh)" || printf "%bCouldn't change default shell. You may need to do this manually.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-    fi
     
     # Install Oh My Zsh non-interactively.
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
@@ -228,7 +308,7 @@ setup_zsh() {
         printf "%bOh My Zsh already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
     fi
     
-    # Install Zsh plugins.
+    # Install Zsh plugins in parallel for efficiency
     ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
     
     declare -A zsh_plugins=(
@@ -237,10 +317,11 @@ setup_zsh() {
         ["zsh-completions"]="https://github.com/zsh-users/zsh-completions"
     )
     
+    # Install plugins
     for plugin in "${!zsh_plugins[@]}"; do
         if [ ! -d "$ZSH_CUSTOM/plugins/$plugin" ]; then
             printf "%bInstalling zsh plugin: %s%b\n" "${C_YELLOW}" "$plugin" "${C_DEFAULT}"
-            git clone "${zsh_plugins[$plugin]}" "$ZSH_CUSTOM/plugins/$plugin"
+            git clone --depth=1 "${zsh_plugins[$plugin]}" "$ZSH_CUSTOM/plugins/$plugin" &
         else
             printf "%b%s already installed%b\n" "${C_GREEN}" "$plugin" "${C_DEFAULT}"
         fi
@@ -249,9 +330,22 @@ setup_zsh() {
     # Install Powerlevel10k theme
     if [ ! -d "$ZSH_CUSTOM/themes/powerlevel10k" ]; then
         printf "%bInstalling Powerlevel10k theme...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k"
+        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k" &
     else
         printf "%bPowerlevel10k already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    fi
+    
+    # Wait for all background jobs to complete
+    wait
+    
+    # Change default shell to zsh
+    if [[ "$SHELL" != */zsh ]]; then
+        printf "%bChanging default shell to zsh...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        chsh -s "$(which zsh)" || {
+            printf "%bCouldn't change default shell automatically. Please run: chsh -s \$(which zsh)%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        }
+    else
+        printf "%bZsh is already the default shell%b\n" "${C_GREEN}" "${C_DEFAULT}"
     fi
 }
 
@@ -307,14 +401,14 @@ install_nerd_fonts() {
     # Check if fonts are already installed
     if fc-list | grep -i "meslo" | grep -i "nerd" >/dev/null 2>&1; then
         printf "%bNerd Fonts (MesloLGS) appear to be already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
-        printf "%bDo you want to reinstall? [y/N]: %b" "${C_YELLOW}" "${C_DEFAULT}"
-        read -r reinstall
-        [[ ! "$reinstall" =~ ^[Yy]$ ]] && return
+        if ! confirm "Do you want to reinstall?"; then
+            return
+        fi
     fi
     
     mkdir -p "$HOME/.local/share/fonts"
     
-    # Download specific Nerd Font files directly instead of building
+    # Download font files efficiently using array and parallel downloads
     font_files=(
         "MesloLGS%20NF%20Regular.ttf"
         "MesloLGS%20NF%20Bold.ttf"
@@ -324,17 +418,25 @@ install_nerd_fonts() {
     
     base_url="https://github.com/romkatv/powerlevel10k-media/raw/master"
     
+    # Download fonts in parallel for faster installation
     for font in "${font_files[@]}"; do
         font_name=$(echo "$font" | sed 's/%20/ /g')
-        printf "%bDownloading %s...%b\n" "${C_YELLOW}" "$font_name" "${C_DEFAULT}"
-        curl -fLo "$HOME/.local/share/fonts/$font_name" "$base_url/$font" || {
-            printf "%bFailed to download %s%b\n" "${C_RED}" "$font_name" "${C_DEFAULT}"
-        }
+        if [[ ! -f "$HOME/.local/share/fonts/$font_name" ]]; then
+            printf "%bDownloading %s...%b\n" "${C_YELLOW}" "$font_name" "${C_DEFAULT}"
+            (curl -fLo "$HOME/.local/share/fonts/$font_name" "$base_url/$font" && \
+             printf "%bDownloaded %s successfully%b\n" "${C_GREEN}" "$font_name" "${C_DEFAULT}") || \
+            printf "%bFailed to download %s%b\n" "${C_RED}" "$font_name" "${C_DEFAULT}" &
+        else
+            printf "%b%s already exists%b\n" "${C_GREEN}" "$font_name" "${C_DEFAULT}"
+        fi
     done
     
-    # Rebuild the system font cache to register the new fonts.
+    # Wait for all downloads to complete
+    wait
+    
+    # Rebuild the system font cache
     printf "%bRebuilding font cache...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-    fc-cache -f -v >/dev/null 2>&1
+    fc-cache -fv >/dev/null 2>&1
     printf "%bNerd Fonts installed successfully%b\n" "${C_GREEN}" "${C_DEFAULT}"
 }
 
@@ -343,12 +445,15 @@ cleanup() {
     files_to_clean=(
         "$HOME/Downloads/nerd-fonts"
         "$HOME/Downloads/nvim-linux-x86_64.tar.gz"
+        "$HOME/Downloads/neovim"
     )
     
     for file in "${files_to_clean[@]}"; do
         if [[ -e "$file" ]]; then
-            rm -rf "$file"
-            printf "%bRemoved %s%b\n" "${C_GREEN}" "$file" "${C_DEFAULT}"
+            if confirm "Remove $file?"; then
+                rm -rf "$file"
+                printf "%bRemoved %s%b\n" "${C_GREEN}" "$file" "${C_DEFAULT}"
+            fi
         fi
     done
 }
@@ -358,6 +463,7 @@ main_menu() {
     # Perform initial system checks
     check_not_root
     check_debian_ubuntu
+    check_dependencies || die "Please install missing dependencies first."
     
     printf "%b%s%b\n" "${C_BLUE}${C_BOLD}" "Welcome to the Linux Development Environment Setup Script" "${C_DEFAULT}"
     printf "%bDetected OS: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$(lsb_release -d 2>/dev/null | cut -f2 || echo 'Debian/Ubuntu')"
@@ -373,6 +479,7 @@ main_menu() {
         echo "7. Copy Dotfiles Only"
         echo "8. Setup Rust Environment"
         echo "9. Install OpenVPN3"
+        echo "10. Install Docker"
         echo "s. Show System Information"
         echo "q. Quit"
         printf "%bChoose an option: %b" "${C_YELLOW}" "${C_DEFAULT}"
@@ -386,6 +493,7 @@ main_menu() {
                     purge_old_editors
                     setup_rust
                     setup_openvpn
+                    install_docker
                     install_snap_packages
                     install_neovim
                     clone_git_repos
@@ -406,6 +514,7 @@ main_menu() {
             7) copy_dotfiles ;;
             8) setup_rust ;;
             9) setup_openvpn ;;
+            10) install_docker ;;
             s|S)
                 printf "\n%b--- System Information ---%b\n" "${C_BLUE}${C_BOLD}" "${C_DEFAULT}"
                 printf "%bOS: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$(lsb_release -d 2>/dev/null | cut -f2 || echo 'Unknown')"

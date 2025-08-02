@@ -1,10 +1,15 @@
 
-#!/usr/bin/env bash
+#!/bin/bash
 
 # --- Script Configuration and Safety ---
 # Exit immediately if a command exits with a non-zero status.
-# Exit on error, undefined variable, and error in pipeline
-set -euo pipefail
+# Exit on error and undefined variable
+set -eu
+
+# Enable pipefail if supported (bash 3.0+)
+if [ -n "${BASH_VERSION:-}" ] && [ "${BASH_VERSINFO[0]}" -ge 3 ]; then
+    set -o pipefail
+fi
 
 # --- Color Definitions for UI ---
 C_DEFAULT='\033[0m'

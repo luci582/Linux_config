@@ -1,0 +1,27 @@
+# Sample Ghostty terminal configuration
+# Font configuration
+font-family = "MesloLGS NF"
+font-size = 12
+
+# Window configuration
+window-padding-x = 4
+window-padding-y = 4
+
+# Color scheme
+theme = "GruvboxDark"
+
+# Cursor configuration
+cursor-style = "bar"
+cursor-style-blink = true
+
+# Shell integration
+shell-integration = "zsh"
+
+# Key bindings
+keybind = "ctrl+shift+c=copy_to_clipboard"
+keybind = "ctrl+shift+v=paste_from_clipboard"
+keybind = "ctrl+shift+n=new_window"
+keybind = "ctrl+shift+t=new_tab"
+
+# Performance
+sync-to-monitor = true

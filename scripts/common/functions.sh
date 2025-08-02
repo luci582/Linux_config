@@ -1,17 +1,8 @@
-
 #!/bin/bash
 
-# --- Script Configuration and Safety ---
-# Exit immediately if a command exits with a non-zero status.
-# Exit on error and undefined variable
-set -eu
+# Common functions shared between Ubuntu and Debian setup scripts
 
-# Enable pipefail if supported (bash 3.0+)
-if [ -n "${BASH_VERSION:-}" ] && [ "${BASH_VERSINFO[0]}" -ge 3 ]; then
-    set -o pipefail
-fi
-
-# --- Color Definitions for UI ---
+# --- Color Definitions ---
 C_DEFAULT='\033[0m'
 C_RED='\033[0;31m'
 C_GREEN='\033[0;32m'
@@ -20,32 +11,15 @@ C_BLUE='\033[0;34m'
 C_BOLD='\033[1m'
 
 # --- Helper Functions ---
-# Prints a formatted header message.
 print_header() {
     printf "\n%b%s%b\n" "${C_BLUE}${C_BOLD}" "--- $1 ---" "${C_DEFAULT}"
 }
 
-# Prints an error message and exits
 die() {
     printf "\n%b[ERROR]%b %s\n" "${C_RED}${C_BOLD}" "${C_DEFAULT}" "$1" >&2
     exit 1
 }
 
-# Check if running as root
-check_not_root() {
-    if [ "$(id -u)" -eq 0 ]; then
-        die "This script should not be run as root. Please run as a regular user."
-    fi
-}
-
-# Check if system is Debian/Ubuntu based
-check_debian_ubuntu() {
-    if [ ! -f /etc/debian_version ]; then
-        die "This script is designed for Debian/Ubuntu systems only."
-    fi
-}
-
-# Prompt user for confirmation
 confirm() {
     local prompt="${1:-Continue?}"
     printf "%b%s [y/N]: %b" "${C_YELLOW}" "$prompt" "${C_DEFAULT}"
@@ -56,7 +30,6 @@ confirm() {
     esac
 }
 
-# Check if required commands are available
 check_dependencies() {
     local deps="curl git sudo"
     local missing=""
@@ -79,45 +52,7 @@ check_dependencies() {
     return 0
 }
 
-# --- Installation and Setup Functions ---
-
-update_system() {
-    print_header "Updating and Upgrading System Packages"
-    if ! command -v apt >/dev/null 2>&1; then
-        die "This script requires apt (Debian/Ubuntu)."
-    fi
-    sudo apt update -y && sudo apt full-upgrade -y && sudo apt autoremove -y && sudo apt autoclean -y
-}
-
-install_core_tools() {
-    print_header "Installing Core Packages & Tools"
-    # Install packages in groups for better efficiency
-    printf "%bInstalling essential development tools...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-    sudo apt install -y \
-        curl git wget gpg ca-certificates \
-        build-essential cmake pkg-config \
-        software-properties-common unzip tree \
-        lsb-release
-    
-    printf "%bInstalling terminal and productivity tools...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-    sudo apt install -y \
-        tmux zsh flameshot snapd bat btop \
-        htop neofetch autojump thefuck fzf \
-        cpufrequtils \
-        freerdp2-x11
-    
-    # Install Neovim build dependencies
-    printf "%bInstalling Neovim build dependencies...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-    sudo apt install -y \
-        ninja-build gettext cmake unzip curl \
-        build-essential
-}
-
-purge_old_editors() {
-    print_header "Purging Old Vim/Neovim to prevent conflicts"
-    sudo apt purge -y vim || true
-    sudo apt purge -y neovim || true
-}
+# --- Installation Functions ---
 
 setup_rust() {
     print_header "Installing Rust and Cargo Packages"
@@ -145,7 +80,7 @@ setup_rust() {
         printf "%beza is already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
     fi
     
-    # Make Cargo persistent for new shells - check both .zshrc and .bashrc efficiently
+    # Make Cargo persistent for new shells
     for rc_file in ~/.zshrc ~/.bashrc; do
         if [ -f "$rc_file" ] && ! grep -q 'export PATH="$HOME/.cargo/bin:$PATH"' "$rc_file" 2>/dev/null; then
             {
@@ -158,19 +93,9 @@ setup_rust() {
     done
 }
 
-setup_openvpn() {
-    print_header "Installing OpenVPN3"
-    # Detect codename for Ubuntu/Debian
-    codename=$(lsb_release -cs 2>/dev/null || echo "bookworm")
-    sudo mkdir -p /etc/apt/keyrings
-    curl -sSfL https://packages.openvpn.net/packages-repo.gpg | sudo tee /etc/apt/keyrings/openvpn.asc > /dev/null
-    echo "deb [signed-by=/etc/apt/keyrings/openvpn.asc] https://packages.openvpn.net/openvpn3/debian $codename main" | sudo tee /etc/apt/sources.list.d/openvpn3.list > /dev/null
-    sudo apt update
-    sudo apt install -y openvpn3 || sudo apt install -y openvpn
-}
-
 install_docker() {
     print_header "Installing Docker"
+    
     # Remove any old Docker installations
     sudo apt remove -y docker docker-engine docker.io containerd runc || true
     
@@ -178,20 +103,18 @@ install_docker() {
     sudo apt update
     sudo apt install -y ca-certificates curl gnupg lsb-release
     
-    # Add Docker GPG key
+    # Add Docker GPG key and repository
     sudo mkdir -p /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     
-    # Add Docker repository (works for both Ubuntu and Debian)
-    if [ -f /etc/debian_version ]; then
-        # For Debian-based systems
-        if grep -q "Ubuntu" /etc/os-release; then
-            # Ubuntu
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-        else
-            # Debian
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-        fi
+    # Detect if Ubuntu or Debian for correct repository
+    if grep -q "Ubuntu" /etc/os-release; then
+        # Ubuntu
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    else
+        # Debian
+        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     fi
     
     # Install Docker
@@ -208,23 +131,31 @@ install_docker() {
     printf "%bDocker installed successfully. You may need to log out and back in to use Docker without sudo.%b\n" "${C_GREEN}" "${C_DEFAULT}"
 }
 
-install_ssh_server() {
-    print_header "Installing SSH Server (optional)"
-    if confirm "Do you want to install SSH server? This may require resolving package conflicts."; then
-        printf "%bAttempting to install SSH server...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        # Try to install openssh-server, and if it fails due to version conflicts,
-        # provide instructions to the user
-        if ! sudo apt install -y openssh-server; then
-            printf "%b%sSSH server installation failed due to package conflicts.%b\n" "${C_RED}${C_BOLD}" "" "${C_DEFAULT}"
-            printf "%bTo resolve this manually, you can try:%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-            printf "  sudo apt remove openssh-client\n"
-            printf "  sudo apt install openssh-server\n"
-            printf "  sudo apt install openssh-client\n"
-            printf "%bOr check your package sources for version conflicts.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        else
-            printf "%bSSH server installed successfully%b\n" "${C_GREEN}" "${C_DEFAULT}"
-        fi
+install_virt_manager() {
+    print_header "Installing Virt-Manager and KVM"
+    
+    # Install virtualization packages
+    sudo apt update
+    sudo apt install -y \
+        qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils \
+        virt-manager virt-viewer spice-vdagent
+    
+    # Add user to libvirt groups
+    sudo usermod -aG libvirt "$USER"
+    sudo usermod -aG kvm "$USER"
+    
+    # Enable and start libvirtd service
+    sudo systemctl enable libvirtd
+    sudo systemctl start libvirtd
+    
+    # Check if virtualization is supported
+    if egrep -c '(vmx|svm)' /proc/cpuinfo > /dev/null; then
+        printf "%bVirtualization support detected%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    else
+        printf "%bWarning: Hardware virtualization may not be supported or enabled in BIOS%b\n" "${C_YELLOW}" "${C_DEFAULT}"
     fi
+    
+    printf "%bVirt-Manager installed successfully. You may need to log out and back in to use it.%b\n" "${C_GREEN}" "${C_DEFAULT}"
 }
 
 install_snap_packages() {
@@ -259,10 +190,11 @@ discord"
         fi
     done
 }
+
 install_neovim() {
     print_header "Building and Installing Latest Neovim from Source"
     
-    # Check if neovim is already installed and get version
+    # Check if neovim is already installed
     if command -v nvim >/dev/null 2>&1; then
         current_version=$(nvim --version | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
         printf "%bCurrent Neovim version: %s%b\n" "${C_YELLOW}" "$current_version" "${C_DEFAULT}"
@@ -302,7 +234,7 @@ install_neovim() {
     # Create symlink for system-wide access
     sudo ln -sf /opt/neovim/bin/nvim /usr/local/bin/nvim
     
-    # Also add to current user's shell configs
+    # Add to shell configs
     for rc_file in ~/.zshrc ~/.bashrc; do
         if [ -f "$rc_file" ] && ! grep -q '/opt/neovim/bin' "$rc_file" 2>/dev/null; then
             echo 'export PATH="$PATH:/opt/neovim/bin"' >> "$rc_file"
@@ -330,7 +262,7 @@ clone_git_repos() {
 setup_zsh() {
     print_header "Setting up Zsh, Oh My Zsh, and Powerlevel10k"
     
-    # Install Oh My Zsh non-interactively.
+    # Install Oh My Zsh non-interactively
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
         printf "%bInstalling Oh My Zsh...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
@@ -338,10 +270,9 @@ setup_zsh() {
         printf "%bOh My Zsh already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
     fi
     
-    # Install Zsh plugins in parallel for efficiency
+    # Install Zsh plugins
     ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
     
-    # Install plugins manually for better compatibility
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]; then
         printf "%bInstalling zsh plugin: zsh-autosuggestions%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         git clone --depth=1 "https://github.com/zsh-users/zsh-autosuggestions" "$ZSH_CUSTOM/plugins/zsh-autosuggestions" &
@@ -397,14 +328,20 @@ setup_nvchad() {
 copy_dotfiles() {
     print_header "Copying Local Configuration Files"
     
-    # Get the script directory
-    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    # Get the script directory (go up from scripts/common to root)
+    script_dir="$(cd "$(dirname "$0")/../.." && pwd)"
+    dotfiles_dir="$script_dir/dotfiles"
     
-    # Copy dotfiles individually for better compatibility
+    if [ ! -d "$dotfiles_dir" ]; then
+        printf "%bWarning: dotfiles directory not found at %s%b\n" "${C_YELLOW}" "$dotfiles_dir" "${C_DEFAULT}"
+        return
+    fi
+    
+    # Copy dotfiles individually
     copy_dotfile() {
         local source_file="$1"
         local target_file="$2"
-        local source_path="$script_dir/$source_file"
+        local source_path="$dotfiles_dir/$source_file"
         
         if [ -f "$source_path" ]; then
             # Create target directory if needed
@@ -420,7 +357,7 @@ copy_dotfiles() {
             cp "$source_path" "$target_file"
             printf "%bCopied %s to %s%b\n" "${C_GREEN}" "$source_file" "$target_file" "${C_DEFAULT}"
         else
-            printf "%bWarning: %s not found in script directory%b\n" "${C_YELLOW}" "$source_file" "${C_DEFAULT}"
+            printf "%bWarning: %s not found in dotfiles directory%b\n" "${C_YELLOW}" "$source_file" "${C_DEFAULT}"
         fi
     }
     
@@ -444,7 +381,7 @@ install_nerd_fonts() {
     
     mkdir -p "$HOME/.local/share/fonts"
     
-    # Download font files efficiently using list and parallel downloads
+    # Download font files
     font_files="MesloLGS%20NF%20Regular.ttf
 MesloLGS%20NF%20Bold.ttf
 MesloLGS%20NF%20Italic.ttf
@@ -452,7 +389,7 @@ MesloLGS%20NF%20Bold%20Italic.ttf"
     
     base_url="https://github.com/romkatv/powerlevel10k-media/raw/master"
     
-    # Download fonts in parallel for faster installation
+    # Download fonts in parallel
     echo "$font_files" | while IFS= read -r font; do
         [ -z "$font" ] && continue
         font_name=$(echo "$font" | sed 's/%20/ /g')
@@ -469,7 +406,7 @@ MesloLGS%20NF%20Bold%20Italic.ttf"
     # Wait for all downloads to complete
     wait
     
-    # Rebuild the system font cache
+    # Rebuild font cache
     printf "%bRebuilding font cache...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
     fc-cache -fv >/dev/null 2>&1
     printf "%bNerd Fonts installed successfully%b\n" "${C_GREEN}" "${C_DEFAULT}"
@@ -478,7 +415,6 @@ MesloLGS%20NF%20Bold%20Italic.ttf"
 cleanup() {
     print_header "Cleaning Up Downloaded Files"
     
-    # Clean up files individually
     for file in "$HOME/Downloads/nerd-fonts" "$HOME/Downloads/nvim-linux-x86_64.tar.gz" "$HOME/Downloads/neovim"; do
         if [ -e "$file" ]; then
             if confirm "Remove $file?"; then
@@ -528,6 +464,27 @@ check_installation_status() {
     if command -v docker >/dev/null 2>&1; then
         docker_version=$(docker --version | awk '{print $3}' | sed 's/,//')
         printf "%b✓ INSTALLED (v%s)%b\n" "${C_GREEN}" "$docker_version" "${C_DEFAULT}"
+        passed_checks=$((passed_checks + 1))
+    else
+        printf "%b✗ MISSING%b\n" "${C_RED}" "${C_DEFAULT}"
+    fi
+    
+    printf "%b%-40s%b" "${C_YELLOW}" "Checking Virt-Manager..." "${C_DEFAULT}"
+    total_checks=$((total_checks + 1))
+    if command -v virt-manager >/dev/null 2>&1; then
+        printf "%b✓ INSTALLED%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        passed_checks=$((passed_checks + 1))
+    else
+        printf "%b✗ MISSING%b\n" "${C_RED}" "${C_DEFAULT}"
+    fi
+    
+    printf "%b%-40s%b" "${C_YELLOW}" "Checking KVM support..." "${C_DEFAULT}"
+    total_checks=$((total_checks + 1))
+    if systemctl is-active --quiet libvirtd 2>/dev/null; then
+        printf "%b✓ RUNNING%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        passed_checks=$((passed_checks + 1))
+    elif command -v libvirtd >/dev/null 2>&1; then
+        printf "%b◐ INSTALLED (not running)%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         passed_checks=$((passed_checks + 1))
     else
         printf "%b✗ MISSING%b\n" "${C_RED}" "${C_DEFAULT}"
@@ -668,6 +625,22 @@ check_installation_status() {
         printf "%b◐ NOT ZSH (%s)%b\n" "${C_YELLOW}" "$SHELL" "${C_DEFAULT}"
     fi
     
+    printf "%b%-40s%b" "${C_YELLOW}" "Checking dotfiles..." "${C_DEFAULT}"
+    total_checks=$((total_checks + 1))
+    dotfiles_found=0
+    dotfiles_total=4
+    [ -f "$HOME/.zshrc" ] && dotfiles_found=$((dotfiles_found + 1))
+    [ -f "$HOME/.tmux.conf" ] && dotfiles_found=$((dotfiles_found + 1))
+    [ -f "$HOME/.p10k.zsh" ] && dotfiles_found=$((dotfiles_found + 1))
+    [ -f "$HOME/.config/ghostty/config" ] && dotfiles_found=$((dotfiles_found + 1))
+    
+    if [ "$dotfiles_found" -eq "$dotfiles_total" ]; then
+        printf "%b✓ INSTALLED (%d/%d)%b\n" "${C_GREEN}" "$dotfiles_found" "$dotfiles_total" "${C_DEFAULT}"
+        passed_checks=$((passed_checks + 1))
+    else
+        printf "%b✗ PARTIAL (%d/%d)%b\n" "${C_YELLOW}" "$dotfiles_found" "$dotfiles_total" "${C_DEFAULT}"
+    fi
+    
     # Summary
     printf "\n%b--- Installation Summary ---%b\n" "${C_BOLD}" "${C_DEFAULT}"
     printf "%bTotal checks: %d%b\n" "${C_BLUE}" "$total_checks" "${C_DEFAULT}"
@@ -685,89 +658,3 @@ check_installation_status() {
         printf "\n%b⚠️  Many components are missing. Consider running the full installation.%b\n" "${C_RED}${C_BOLD}" "${C_DEFAULT}"
     fi
 }
-
-# --- Main Menu Function ---
-main_menu() {
-    # Perform initial system checks
-    check_not_root
-    check_debian_ubuntu
-    check_dependencies || die "Please install missing dependencies first."
-    
-    printf "%b%s%b\n" "${C_BLUE}${C_BOLD}" "Welcome to the Linux Development Environment Setup Script" "${C_DEFAULT}"
-    printf "%bDetected OS: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$(lsb_release -d 2>/dev/null | cut -f2 || echo 'Debian/Ubuntu')"
-    
-    while true; do
-        printf "\n%b--- Setup Menu ---%b\n" "${C_GREEN}${C_BOLD}" "${C_DEFAULT}"
-        echo "1. Run Full Installation (All Steps)"
-        echo "2. Update System Packages Only"
-        echo "3. Install Core Tools Only"
-        echo "4. Setup Zsh & Oh My Zsh"
-        echo "5. Install Neovim & NvChad"
-        echo "6. Install Nerd Fonts Only"
-        echo "7. Copy Dotfiles Only"
-        echo "8. Setup Rust Environment"
-        echo "9. Install OpenVPN3"
-        echo "10. Install Docker"
-        echo "11. Install SSH Server"
-        echo "c. Check Installation Status"
-        echo "s. Show System Information"
-        echo "q. Quit"
-        printf "%bChoose an option: %b" "${C_YELLOW}" "${C_DEFAULT}"
-        read -r choice
-        
-        case "$choice" in
-            1)
-                if confirm "This will install all components. Continue?"; then
-                    update_system
-                    install_core_tools
-                    purge_old_editors
-                    setup_rust
-                    setup_openvpn
-                    install_docker
-                    install_snap_packages
-                    install_neovim
-                    clone_git_repos
-                    setup_zsh
-                    setup_nvchad
-                    copy_dotfiles
-                    install_nerd_fonts
-                    cleanup
-                    printf "\n%b%sFull installation complete!%b\n" "${C_GREEN}${C_BOLD}" "" "${C_DEFAULT}"
-                    printf "%bPlease restart your terminal or run 'source ~/.zshrc' to apply changes.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-                fi
-                ;;
-            2) update_system ;;
-            3) install_core_tools ;;
-            4) setup_zsh ;;
-            5) purge_old_editors && install_neovim && setup_nvchad ;;
-            6) install_nerd_fonts ;;
-            7) copy_dotfiles ;;
-            8) setup_rust ;;
-            9) setup_openvpn ;;
-            10) install_docker ;;
-            11) install_ssh_server ;;
-            c|C) check_installation_status ;;
-            s|S)
-                printf "\n%b--- System Information ---%b\n" "${C_BLUE}${C_BOLD}" "${C_DEFAULT}"
-                printf "%bOS: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$(lsb_release -d 2>/dev/null | cut -f2 || echo 'Unknown')"
-                printf "%bKernel: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$(uname -r)"
-                printf "%bShell: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$SHELL"
-                printf "%bUser: %b%s\n" "${C_GREEN}" "${C_DEFAULT}" "$USER"
-                continue
-                ;;
-            q|Q)
-                printf "%bExiting. Have a great day!%b\n" "${C_GREEN}" "${C_DEFAULT}"
-                exit 0
-                ;;
-            *)
-                printf "\n%bInvalid option. Please try again.%b\n" "${C_RED}" "${C_DEFAULT}"
-                continue
-                ;;
-        esac
-        printf "%b\nOperation complete. Returning to menu...%b\n" "${C_GREEN}" "${C_DEFAULT}"
-        sleep 2
-    done
-}
-
-# --- Script Execution Starts Here ---
-main_menu

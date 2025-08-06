@@ -93,8 +93,8 @@ plugins=(
   zsh-syntax-highlighting
   history-substring-search
   autojump
-  ssh-agent
-  gpg-agent
+  # ssh-agent
+  # gpg-agent
   tmux
   extract
   thefuck
@@ -163,3 +163,9 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=#ff00ff,bg=cyan,bold,underline"
 # Generated for envman. Do not edit.
 [ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
 export PATH=$PATH:/usr/games
+
+export ANDROID_HOME=~/Android/Sdk
+export ANDROID_SDK_ROOT=~/Android/Sdk
+export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+export PATH=$ANDROID_HOME/platform-tools:$PATH
+export PATH=$ANDROID_HOME/emulator:$PATH

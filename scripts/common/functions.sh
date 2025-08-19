@@ -365,6 +365,7 @@ copy_dotfiles() {
     copy_dotfile ".zshrc" "$HOME/.zshrc"
     copy_dotfile ".tmux.conf" "$HOME/.tmux.conf"
     copy_dotfile ".p10k.zsh" "$HOME/.p10k.zsh"
+    copy_dotfile ".bashrc" "$HOME/.bashrc"
     copy_dotfile "config" "$HOME/.config/ghostty/config"
 }
 

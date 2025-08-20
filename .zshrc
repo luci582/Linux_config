@@ -147,7 +147,7 @@ alias la='eza -lbhHigUmuSa --icons'
 alias lx='eza -lbhHigUmuSa@ --icons'
 alias lt='eza --tree $eza_params --icons'
 alias tree='eza --tree $eza_params --icons'
-alias cat='batcat'
+# alias cat='batcat'
 alias vim='nvim'
 alias update='sudo apt update -y && sudo apt full-upgrade -y && sudo apt autoremove --purge -y && sudo apt clean'
 alias cpupower='batcat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor' 
@@ -169,3 +169,8 @@ export ANDROID_SDK_ROOT=~/Android/Sdk
 export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
 export PATH=$ANDROID_HOME/platform-tools:$PATH
 export PATH=$ANDROID_HOME/emulator:$PATH
+
+
+export PATH="/var/lib/flatpak/exports/bin:$PATH"
+
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"

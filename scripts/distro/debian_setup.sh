@@ -27,22 +27,25 @@ install_core_tools() {
     sudo apt install -y \
         curl git wget gpg ca-certificates \
         build-essential cmake pkg-config \
-        software-properties-common unzip tree \
-        lsb-release apt-transport-https
+        unzip tree lsb-release apt-transport-https || true
     
-    # Install terminal and productivity tools
+    # Install terminal and productivity tools (with error handling for optional packages)
     printf "%bInstalling terminal and productivity tools...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    
+    # Core terminal tools (essential)
     sudo apt install -y \
-        tmux zsh flameshot snapd bat btop \
-        htop neofetch autojump thefuck fzf \
-        cpufrequtils \
-        freerdp2-x11
+        tmux zsh htop neofetch fzf || true
+    
+    # Optional tools (install individually to avoid failure)
+    for pkg in flameshot snapd bat btop autojump thefuck cpufrequtils freerdp2-x11; do
+        sudo apt install -y "$pkg" 2>/dev/null || printf "%bSkipping unavailable package: %s%b\n" "${C_YELLOW}" "$pkg" "${C_DEFAULT}"
+    done
     
     # Install Neovim build dependencies
     printf "%bInstalling Neovim build dependencies...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
     sudo apt install -y \
         ninja-build gettext cmake unzip curl \
-        build-essential libtool libtool-bin autoconf automake g++ pkg-config
+        build-essential libtool libtool-bin autoconf automake g++ pkg-config || true
 }
 
 purge_old_editors() {

@@ -159,14 +159,14 @@ setup_rust() {
 }
 
 setup_openvpn() {
-    print_header "Installing OpenVPN3"
+   # print_header "Installing OpenVPN3"
     # Detect codename for Ubuntu/Debian
-    codename=$(lsb_release -cs 2>/dev/null || echo "bookworm")
-    sudo mkdir -p /etc/apt/keyrings
-    curl -sSfL https://packages.openvpn.net/packages-repo.gpg | sudo tee /etc/apt/keyrings/openvpn.asc > /dev/null
-    echo "deb [signed-by=/etc/apt/keyrings/openvpn.asc] https://packages.openvpn.net/openvpn3/debian $codename main" | sudo tee /etc/apt/sources.list.d/openvpn3.list > /dev/null
+   # codename=$(lsb_release -cs 2>/dev/null || echo "bookworm")
+    #sudo mkdir -p /etc/apt/keyrings
+    #curl -sSfL https://packages.openvpn.net/packages-repo.gpg | sudo tee /etc/apt/keyrings/openvpn.asc > /dev/null
+    #echo "deb [signed-by=/etc/apt/keyrings/openvpn.asc] https://packages.openvpn.net/openvpn3/debian $codename main" | sudo tee /etc/apt/sources.list.d/openvpn3.list > /dev/null
     sudo apt update
-    sudo apt install -y openvpn3 || sudo apt install -y openvpn
+    #sudo apt install -y openvpn3 || sudo apt install -y openvpn
 }
 
 install_docker() {
@@ -190,13 +190,13 @@ install_docker() {
             echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
         else
             # Debian
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
         fi
     fi
     
     # Install Docker
     sudo apt update
-    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    # sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     
     # Add current user to docker group
     sudo usermod -aG docker "$USER"

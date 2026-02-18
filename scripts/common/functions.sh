@@ -149,7 +149,7 @@ install_virt_manager() {
     sudo systemctl start libvirtd
     
     # Check if virtualization is supported
-    if egrep -c '(vmx|svm)' /proc/cpuinfo > /dev/null; then
+    if grep -Ec '(vmx|svm)' /proc/cpuinfo > /dev/null; then
         printf "%bVirtualization support detected%b\n" "${C_GREEN}" "${C_DEFAULT}"
     else
         printf "%bWarning: Hardware virtualization may not be supported or enabled in BIOS%b\n" "${C_YELLOW}" "${C_DEFAULT}"
@@ -306,7 +306,7 @@ setup_zsh() {
     wait
     
     # Change default shell to zsh
-    if [ "$SHELL" != *zsh ]; then
+    if ! echo "$SHELL" | grep -q "zsh"; then
         printf "%bChanging default shell to zsh...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         chsh -s "$(which zsh)" || {
             printf "%bCouldn't change default shell automatically. Please run: chsh -s \$(which zsh)%b\n" "${C_YELLOW}" "${C_DEFAULT}"
@@ -619,7 +619,7 @@ check_installation_status() {
     
     printf "%b%-40s%b" "${C_YELLOW}" "Checking default shell..." "${C_DEFAULT}"
     total_checks=$((total_checks + 1))
-    if [ "$SHELL" = *zsh ] || echo "$SHELL" | grep -q "zsh"; then
+    if echo "$SHELL" | grep -q "zsh"; then
         printf "%b✓ ZSH (default)%b\n" "${C_GREEN}" "${C_DEFAULT}"
         passed_checks=$((passed_checks + 1))
     else

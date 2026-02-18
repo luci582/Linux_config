@@ -3,7 +3,7 @@
 # Linux Development Environment Setup - Main Launcher
 # This script detects the OS and runs the appropriate setup script
 
-set -eu
+set -euo pipefail
 
 # --- Color Definitions ---
 C_DEFAULT='\033[0m'
@@ -26,10 +26,14 @@ die() {
 detect_os() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        OS=$NAME
-        VER=$VERSION_ID
+        OS=${NAME:-}
+        VER=${VERSION_ID:-}
     else
         die "Cannot detect OS. /etc/os-release not found."
+    fi
+    
+    if [ -z "$OS" ]; then
+        die "Cannot detect OS. NAME variable not found in /etc/os-release."
     fi
     
     case "$OS" in

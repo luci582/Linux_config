@@ -3,12 +3,7 @@
 # Ubuntu Development Environment Setup Script
 # Optimized for Ubuntu systems
 
-set -eu
-
-# Enable pipefail if supported (bash 3.0+)
-if [ -n "${BASH_VERSION:-}" ] && [ "${BASH_VERSINFO[0]}" -ge 3 ]; then
-    set -o pipefail
-fi
+set -euo pipefail
 
 # Get script directory and source common functions
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -57,24 +52,6 @@ purge_old_editors() {
     sudo apt autoremove -y
 }
 
-setup_openvpn() {
-    print_header "Installing OpenVPN3 for Ubuntu"
-    
-    # Get Ubuntu codename
-    codename=$(lsb_release -cs 2>/dev/null || echo "jammy")
-    
-    # Add OpenVPN repository
-    sudo mkdir -p /etc/apt/keyrings
-    curl -sSfL https://packages.openvpn.net/packages-repo.gpg | sudo tee /etc/apt/keyrings/openvpn.asc > /dev/null
-    echo "deb [signed-by=/etc/apt/keyrings/openvpn.asc] https://packages.openvpn.net/openvpn3/ubuntu $codename main" | sudo tee /etc/apt/sources.list.d/openvpn3.list > /dev/null
-    
-    sudo apt update
-    sudo apt install -y openvpn3 || {
-        printf "%bFallback to standard OpenVPN...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        sudo apt install -y openvpn
-    }
-}
-
 install_ssh_server() {
     print_header "Installing SSH Server for Ubuntu"
     if confirm "Do you want to install SSH server?"; then
@@ -92,6 +69,124 @@ install_ssh_server() {
     fi
 }
 
+install_gnome_extensions() {
+    # Check if GNOME is running
+    if [ "${XDG_CURRENT_DESKTOP:-}" != "GNOME" ] && [ "${GDMSESSION:-}" != "gnome" ] && ! pgrep -x gnome-shell >/dev/null 2>&1; then
+        printf "%bGNOME not detected. Skipping GNOME extensions installation.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        return 0
+    fi
+    
+    print_header "Installing GNOME Extensions"
+    printf "%bGNOME detected. Installing extensions...%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    
+    # Install required packages
+    printf "%bInstalling GNOME extension tools...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    sudo apt install -y gnome-shell-extensions gnome-shell-extension-manager chrome-gnome-shell pipx || true
+    
+    # Install gext using pipx for extension management
+    if command -v pipx >/dev/null 2>&1; then
+        printf "%bInstalling gext extension manager...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        pipx install gnome-extensions-cli --force 2>/dev/null || true
+        pipx ensurepath 2>/dev/null || true
+    fi
+    
+    # List of extensions to install
+    declare -a extensions=(
+        "blur-my-shell@aunetx"
+        "clipboard-indicator@tudmotu.com"
+        "caffeine@patapon.info"
+        "dash-to-dock@micxgx.gmail.com"
+        "system-monitor@gnome-shell-extensions.gcampax.github.com"
+    )
+    
+    printf "\n%bInstalling GNOME Shell Extensions:%b\n" "${C_BLUE}${C_BOLD}" "${C_DEFAULT}"
+    
+    for ext in "${extensions[@]}"; do
+        printf "  - %s\n" "$ext"
+    done
+    
+    printf "\n%bNote: You may need to enable extensions manually using GNOME Extensions app%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    printf "%bor by visiting: https://extensions.gnome.org%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    printf "\n%bAfter installation, press Alt+F2, type 'r', and press Enter to reload GNOME Shell%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    
+    # Try to install using gext if available
+    if command -v gext >/dev/null 2>&1; then
+        printf "\n%bInstalling extensions using gext...%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        for ext in "${extensions[@]}"; do
+            printf "%bInstalling %s...%b\n" "${C_YELLOW}" "$ext" "${C_DEFAULT}"
+            gext install "$ext" 2>/dev/null || printf "%bFailed to install %s (manual installation may be required)%b\n" "${C_RED}" "$ext" "${C_DEFAULT}"
+        done
+    else
+        printf "\n%bAutomatic installation tool not available.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        printf "%bPlease install extensions manually from: https://extensions.gnome.org%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    fi
+    
+    printf "\n%bGNOME extensions setup complete!%b\n" "${C_GREEN}" "${C_DEFAULT}"
+}
+
+update_gnome_extensions() {
+    # Check if GNOME is running
+    if [ "${XDG_CURRENT_DESKTOP:-}" != "GNOME" ] && [ "${GDMSESSION:-}" != "gnome" ] && ! pgrep -x gnome-shell >/dev/null 2>&1; then
+        printf "%bGNOME not detected. Skipping GNOME extensions update.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        return 0
+    fi
+    
+    print_header "Updating GNOME Extensions"
+    printf "%bGNOME detected. Updating extensions...%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    
+    # Check if gext is available
+    if ! command -v gext >/dev/null 2>&1; then
+        printf "%bgext not found. Installing gnome-extensions-cli...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        
+        if command -v pipx >/dev/null 2>&1; then
+            pipx install gnome-extensions-cli --force 2>/dev/null || true
+            pipx ensurepath 2>/dev/null || true
+        else
+            printf "%bpipx not found. Installing pipx...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+            sudo apt install -y pipx
+            pipx install gnome-extensions-cli --force 2>/dev/null || true
+            pipx ensurepath 2>/dev/null || true
+        fi
+    fi
+    
+    # Update extensions using gext
+    if command -v gext >/dev/null 2>&1; then
+        printf "\n%bUpdating all GNOME extensions...%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        
+        # Get list of installed extensions
+        printf "%bFetching installed extensions...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        
+        # Update all extensions
+        if gext update 2>/dev/null; then
+            printf "%bAll extensions updated successfully!%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        else
+            printf "%bUpdate command not fully successful. Trying individual updates...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+            
+            # Try updating specific extensions
+            declare -a extensions=(
+                "blur-my-shell@aunetx"
+                "clipboard-indicator@tudmotu.com"
+                "caffeine@patapon.info"
+                "dash-to-dock@micxgx.gmail.com"
+                "system-monitor@gnome-shell-extensions.gcampax.github.com"
+            )
+            
+            for ext in "${extensions[@]}"; do
+                printf "%bUpdating %s...%b\n" "${C_YELLOW}" "$ext" "${C_DEFAULT}"
+                gext install "$ext" --force 2>/dev/null || printf "%bFailed to update %s%b\n" "${C_RED}" "$ext" "${C_DEFAULT}"
+            done
+        fi
+        
+        printf "\n%bRecommendation: Restart GNOME Shell (Alt+F2, type 'r', Enter) to apply updates%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    else
+        printf "%bCould not install gext tool. Please update extensions manually.%b\n" "${C_RED}" "${C_DEFAULT}"
+        printf "%bYou can update extensions via the GNOME Extensions app or website.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        return 1
+    fi
+    
+    printf "\n%bGNOME extensions update complete!%b\n" "${C_GREEN}" "${C_DEFAULT}"
+}
+
 # --- Menu System ---
 show_menu() {
     printf "\n%b--- Ubuntu Setup Menu ---%b\n" "${C_GREEN}${C_BOLD}" "${C_DEFAULT}"
@@ -103,11 +198,12 @@ show_menu() {
     echo "6.  Install Nerd Fonts Only"
     echo "7.  Copy Dotfiles Only"
     echo "8.  Setup Rust Environment"
-    echo "9.  Install OpenVPN3"
-    echo "10. Install Docker"
-    echo "11. Install SSH Server"
-    echo "12. Install Virt-Manager"
-    echo "13. Install Snap Packages"
+    echo "9.  Install Docker"
+    echo "10. Install SSH Server"
+    echo "11. Install Virt-Manager"
+    echo "12. Install Snap Packages"
+    echo "13. Install GNOME Extensions (if GNOME detected)"
+    echo "14. Update GNOME Extensions (if GNOME detected)"
     echo "c.  Check Installation Status"
     echo "s.  Show System Information"
     echo "q.  Quit"
@@ -140,10 +236,10 @@ main_menu() {
                     install_core_tools
                     purge_old_editors
                     setup_rust
-                    setup_openvpn
                     install_docker
                     install_virt_manager
                     install_snap_packages
+                    install_gnome_extensions
                     install_neovim
                     clone_git_repos
                     setup_zsh
@@ -162,11 +258,12 @@ main_menu() {
             6) install_nerd_fonts ;;
             7) copy_dotfiles ;;
             8) setup_rust ;;
-            9) setup_openvpn ;;
-            10) install_docker ;;
-            11) install_ssh_server ;;
-            12) install_virt_manager ;;
-            13) install_snap_packages ;;
+            9) install_docker ;;
+            10) install_ssh_server ;;
+            11) install_virt_manager ;;
+            12) install_snap_packages ;;
+            13) install_gnome_extensions ;;
+            14) update_gnome_extensions ;;
             c|C) check_installation_status ;;
             s|S)
                 printf "\n%b--- System Information ---%b\n" "${C_BLUE}${C_BOLD}" "${C_DEFAULT}"

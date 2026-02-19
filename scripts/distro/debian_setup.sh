@@ -36,13 +36,33 @@ install_core_tools() {
     sudo apt install -y \
         tmux zsh htop neofetch fzf || true
     
+    # Verify critical packages are installed
+    printf "\n%bVerifying critical packages...%b\n" "${C_BLUE}" "${C_DEFAULT}"
+    local missing_critical=""
+    for pkg in zsh git curl tmux; do
+        if ! command -v "$pkg" >/dev/null 2>&1; then
+            missing_critical="$missing_critical $pkg"
+            printf "%b✗ Missing: %s%b\n" "${C_RED}" "$pkg" "${C_DEFAULT}"
+        else
+            printf "%b✓ Installed: %s%b\n" "${C_GREEN}" "$pkg" "${C_DEFAULT}"
+        fi
+    done
+    
+    if [ -n "$missing_critical" ]; then
+        printf "\n%bRetrying installation of critical packages:%s%b\n" "${C_YELLOW}" "$missing_critical" "${C_DEFAULT}"
+        for pkg in $missing_critical; do
+            sudo apt install -y "$pkg" || printf "%bFailed to install %s%b\n" "${C_RED}" "$pkg" "${C_DEFAULT}"
+        done
+    fi
+    
     # Optional tools (install individually to avoid failure)
+    printf "\n%bInstalling optional packages...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
     for pkg in flameshot snapd bat btop autojump thefuck cpufrequtils freerdp2-x11; do
         sudo apt install -y "$pkg" 2>/dev/null || printf "%bSkipping unavailable package: %s%b\n" "${C_YELLOW}" "$pkg" "${C_DEFAULT}"
     done
     
     # Install Neovim build dependencies
-    printf "%bInstalling Neovim build dependencies...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    printf "\n%bInstalling Neovim build dependencies...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
     sudo apt install -y \
         ninja-build gettext cmake unzip curl \
         build-essential libtool libtool-bin autoconf automake g++ pkg-config || true

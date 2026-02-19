@@ -96,6 +96,17 @@ setup_rust() {
 install_docker() {
     print_header "Installing Docker"
     
+    # Check if Docker is already installed
+    if command -v docker >/dev/null 2>&1; then
+        printf "%bDocker is already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        docker --version
+        if confirm "Docker is already installed. Do you want to reinstall?"; then
+            printf "%bProceeding with Docker reinstallation...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        else
+            return 0
+        fi
+    fi
+    
     # Remove any old Docker installations
     sudo apt remove -y docker docker-engine docker.io containerd runc || true
     
@@ -133,6 +144,14 @@ install_docker() {
 
 install_virt_manager() {
     print_header "Installing Virt-Manager and KVM"
+    
+    # Check if virt-manager is already installed
+    if command -v virt-manager >/dev/null 2>&1; then
+        printf "%bVirt-Manager is already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        if ! confirm "Virt-Manager is already installed. Do you want to reinstall?"; then
+            return 0
+        fi
+    fi
     
     # Install virtualization packages
     sudo apt update
@@ -194,16 +213,15 @@ discord"
 install_neovim() {
     print_header "Building and Installing Latest Neovim from Source"
     
-    # Check if neovim is already installed
+    # Check if neovim is already installed and at a good version
     if command -v nvim >/dev/null 2>&1; then
-        current_version=$(nvim --version | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
-        printf "%bCurrent Neovim version: %s%b\n" "${C_YELLOW}" "$current_version" "${C_DEFAULT}"
+        current_version=$(nvim --version 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+        printf "%bCurrent Neovim version: %s%b\n" "${C_YELLOW}" "${current_version:-unknown}" "${C_DEFAULT}"
         
-        if confirm "Neovim is already installed. Do you want to rebuild from source?"; then
-            printf "%bProceeding with Neovim build...%b\n" "${C_GREEN}" "${C_DEFAULT}"
-        else
-            return
+        if ! confirm "Neovim is already installed. Do you want to rebuild from source?"; then
+            return 0
         fi
+        printf "%bProceeding with Neovim build...%b\n" "${C_GREEN}" "${C_DEFAULT}"
     fi
     
     # Remove old installation
@@ -261,6 +279,30 @@ clone_git_repos() {
 
 setup_zsh() {
     print_header "Setting up Zsh, Oh My Zsh, and Powerlevel10k"
+    
+    # Check if zsh is installed
+    if ! command -v zsh >/dev/null 2>&1; then
+        printf "%bZsh is not installed. Attempting to install...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        if command -v apt >/dev/null 2>&1; then
+            sudo apt update && sudo apt install -y zsh
+        elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y zsh
+        elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y zsh
+        else
+            printf "%bCannot install zsh automatically. Please install zsh manually and run this function again.%b\n" "${C_RED}" "${C_DEFAULT}"
+            return 1
+        fi
+        
+        # Verify installation
+        if ! command -v zsh >/dev/null 2>&1; then
+            printf "%bFailed to install zsh. Please install it manually: sudo apt install zsh%b\n" "${C_RED}" "${C_DEFAULT}"
+            return 1
+        fi
+        printf "%bZsh installed successfully%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    else
+        printf "%bZsh is already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
+    fi
     
     # Install Oh My Zsh non-interactively
     if [ ! -d "$HOME/.oh-my-zsh" ]; then

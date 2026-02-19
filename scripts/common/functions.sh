@@ -229,10 +229,46 @@ install_neovim() {
     
     # Clone or update Neovim repository
     if [ -d "$HOME/Downloads/neovim" ]; then
-        printf "%bUpdating existing Neovim repository...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        printf "%bExisting Neovim repository found. Checking status...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         cd "$HOME/Downloads/neovim"
-        git fetch --all
-        git reset --hard origin/stable
+        
+        # Check if it's a valid git repository
+        if ! git rev-parse --git-dir > /dev/null 2>&1; then
+            printf "%bInvalid git repository. Removing and cloning fresh...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+            cd "$HOME/Downloads"
+            rm -rf neovim
+            git clone --depth=1 --branch=stable https://github.com/neovim/neovim.git
+            cd neovim
+        else
+            # Try to update the repository
+            printf "%bUpdating existing Neovim repository...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+            
+            # Clean any local changes
+            git clean -fdx
+            git reset --hard HEAD
+            
+            # Fetch latest changes
+            if git fetch --all --tags; then
+                # Check if stable branch exists
+                if git rev-parse --verify origin/stable >/dev/null 2>&1; then
+                    git checkout stable 2>/dev/null || git checkout -b stable origin/stable
+                    git reset --hard origin/stable
+                    git pull origin stable
+                else
+                    printf "%bStable branch not found. Removing and cloning fresh...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+                    cd "$HOME/Downloads"
+                    rm -rf neovim
+                    git clone --depth=1 --branch=stable https://github.com/neovim/neovim.git
+                    cd neovim
+                fi
+            else
+                printf "%bFetch failed. Removing and cloning fresh...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+                cd "$HOME/Downloads"
+                rm -rf neovim
+                git clone --depth=1 --branch=stable https://github.com/neovim/neovim.git
+                cd neovim
+            fi
+        fi
     else
         printf "%bCloning Neovim repository...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         mkdir -p "$HOME/Downloads"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Common functions shared between Ubuntu and Debian setup scripts
+# Common functions shared between Ubuntu, Debian, and macOS setup scripts
 
 # --- Color Definitions ---
 C_DEFAULT='\033[0m'
@@ -9,6 +9,43 @@ C_GREEN='\033[0;32m'
 C_YELLOW='\033[0;33m'
 C_BLUE='\033[0;34m'
 C_BOLD='\033[1m'
+
+# --- Mode & Platform Helpers ---
+# INSTALL_MODE: desktop (default) or server (no GUI apps)
+# OS_KIND:      linux or macos
+# DISTRO:       ubuntu | debian | macos
+INSTALL_MODE="${INSTALL_MODE:-desktop}"
+OS_KIND="${OS_KIND:-}"
+DISTRO="${DISTRO:-}"
+
+if [ -z "$OS_KIND" ]; then
+    case "$(uname -s 2>/dev/null || echo)" in
+        Darwin) OS_KIND="macos" ;;
+        Linux)  OS_KIND="linux" ;;
+        *)      OS_KIND="linux" ;;
+    esac
+fi
+
+is_server_mode()  { [ "$INSTALL_MODE" = "server" ]; }
+is_desktop_mode() { [ "$INSTALL_MODE" != "server" ]; }
+is_macos()        { [ "$OS_KIND" = "macos" ]; }
+is_linux()        { [ "$OS_KIND" = "linux" ]; }
+
+skip_if_server() {
+    if is_server_mode; then
+        printf "%b[server mode] skipping: %s%b\n" "${C_YELLOW}" "$1" "${C_DEFAULT}"
+        return 0
+    fi
+    return 1
+}
+
+skip_if_macos() {
+    if is_macos; then
+        printf "%b[macOS] skipping: %s (Linux only)%b\n" "${C_YELLOW}" "$1" "${C_DEFAULT}"
+        return 0
+    fi
+    return 1
+}
 
 # --- Helper Functions ---
 print_header() {
@@ -31,9 +68,14 @@ confirm() {
 }
 
 check_dependencies() {
-    local deps="curl git sudo"
+    local deps="curl git"
     local missing=""
-    
+
+    # sudo is required on Linux; macOS uses it too but it's always present.
+    if is_linux; then
+        deps="$deps sudo"
+    fi
+
     for dep in $deps; do
         if ! command -v "$dep" >/dev/null 2>&1; then
             if [ -z "$missing" ]; then
@@ -43,10 +85,14 @@ check_dependencies() {
             fi
         fi
     done
-    
+
     if [ -n "$missing" ]; then
         printf "%bMissing required dependencies: %s%b\n" "${C_RED}" "$missing" "${C_DEFAULT}"
-        printf "%bPlease install them first: sudo apt update && sudo apt install -y %s%b\n" "${C_YELLOW}" "$missing" "${C_DEFAULT}"
+        if is_macos; then
+            printf "%bInstall Xcode Command Line Tools: xcode-select --install%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        else
+            printf "%bInstall them first: sudo apt update && sudo apt install -y %s%b\n" "${C_YELLOW}" "$missing" "${C_DEFAULT}"
+        fi
         return 1
     fi
     return 0
@@ -95,56 +141,61 @@ setup_rust() {
 
 install_docker() {
     print_header "Installing Docker"
-    
-    # Check if Docker is already installed
+
     if command -v docker >/dev/null 2>&1; then
         printf "%bDocker is already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
-        docker --version
-        if confirm "Docker is already installed. Do you want to reinstall?"; then
-            printf "%bProceeding with Docker reinstallation...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        else
+        docker --version || true
+        if ! confirm "Docker is already installed. Reinstall?"; then
             return 0
         fi
     fi
-    
-    # Remove any old Docker installations
+
+    if is_macos; then
+        if ! command -v brew >/dev/null 2>&1; then
+            die "Homebrew required for Docker install on macOS. Install from https://brew.sh"
+        fi
+        if is_server_mode; then
+            printf "%b[server] Installing docker CLI + colima (headless runtime)...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+            brew install docker docker-compose colima
+            printf "%bStart with: colima start%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        else
+            printf "%bInstalling Docker Desktop cask...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+            brew install --cask docker
+            printf "%bLaunch Docker.app once to finish setup.%b\n" "${C_GREEN}" "${C_DEFAULT}"
+        fi
+        return 0
+    fi
+
+    # --- Linux path ---
     sudo apt remove -y docker docker-engine docker.io containerd runc || true
-    
-    # Update package index and install prerequisites
     sudo apt update
     sudo apt install -y ca-certificates curl gnupg lsb-release
-    
-    # Add Docker GPG key and repository
     sudo mkdir -p /etc/apt/keyrings
-    
-    # Detect if Ubuntu or Debian for correct repository
+
     if grep -q "Ubuntu" /etc/os-release; then
-        # Ubuntu
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     else
-        # Debian
         curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     fi
-    
-    # Install Docker
+
     sudo apt update
     sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    
-    # Add current user to docker group
+
     sudo usermod -aG docker "$USER"
-    
-    # Enable and start Docker service
     sudo systemctl enable docker
     sudo systemctl start docker
-    
-    printf "%bDocker installed successfully. You may need to log out and back in to use Docker without sudo.%b\n" "${C_GREEN}" "${C_DEFAULT}"
+
+    printf "%bDocker installed successfully. Log out and back in to use without sudo.%b\n" "${C_GREEN}" "${C_DEFAULT}"
 }
 
 install_virt_manager() {
     print_header "Installing Virt-Manager and KVM"
-    
+
+    skip_if_macos "virt-manager/KVM" && return 0
+    skip_if_server "virt-manager (GUI virtualization)" && return 0
+
     # Check if virt-manager is already installed
     if command -v virt-manager >/dev/null 2>&1; then
         printf "%bVirt-Manager is already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
@@ -179,6 +230,10 @@ install_virt_manager() {
 
 install_snap_packages() {
     print_header "Installing Snap Packages"
+
+    skip_if_macos "snap packages" && return 0
+    skip_if_server "snap GUI packages (obsidian, vscode, discord, waveterm)" && return 0
+
     if ! command -v snap >/dev/null 2>&1; then
         printf "%bSnapd not found. Installing snapd...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         sudo apt update && sudo apt install -y snapd
@@ -211,13 +266,29 @@ discord"
 }
 
 install_neovim() {
+    if is_macos; then
+        print_header "Installing Neovim via Homebrew"
+        if ! command -v brew >/dev/null 2>&1; then
+            die "Homebrew required. Install from https://brew.sh"
+        fi
+        if command -v nvim >/dev/null 2>&1; then
+            printf "%bNeovim already installed: %s%b\n" "${C_GREEN}" "$(nvim --version | head -n1)" "${C_DEFAULT}"
+            if confirm "Upgrade Neovim via brew?"; then
+                brew upgrade neovim || brew install neovim
+            fi
+        else
+            brew install neovim
+        fi
+        return 0
+    fi
+
     print_header "Building and Installing Latest Neovim from Source"
-    
+
     # Check if neovim is already installed and at a good version
     if command -v nvim >/dev/null 2>&1; then
         current_version=$(nvim --version 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
         printf "%bCurrent Neovim version: %s%b\n" "${C_YELLOW}" "${current_version:-unknown}" "${C_DEFAULT}"
-        
+
         if ! confirm "Neovim is already installed. Do you want to rebuild from source?"; then
             return 0
         fi
@@ -319,7 +390,9 @@ setup_zsh() {
     # Check if zsh is installed
     if ! command -v zsh >/dev/null 2>&1; then
         printf "%bZsh is not installed. Attempting to install...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
-        if command -v apt >/dev/null 2>&1; then
+        if is_macos && command -v brew >/dev/null 2>&1; then
+            brew install zsh
+        elif command -v apt >/dev/null 2>&1; then
             sudo apt update && sudo apt install -y zsh
         elif command -v dnf >/dev/null 2>&1; then
             sudo dnf install -y zsh
@@ -444,20 +517,39 @@ copy_dotfiles() {
     copy_dotfile ".tmux.conf" "$HOME/.tmux.conf"
     copy_dotfile ".p10k.zsh" "$HOME/.p10k.zsh"
     copy_dotfile ".bashrc" "$HOME/.bashrc"
-    copy_dotfile "config" "$HOME/.config/ghostty/config"
+
+    # Ghostty is a GUI terminal — skip in server mode.
+    if is_server_mode; then
+        printf "%b[server mode] skipping ghostty config%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+    else
+        copy_dotfile "config" "$HOME/.config/ghostty/config"
+    fi
 }
 
 install_nerd_fonts() {
     print_header "Installing Nerd Fonts"
-    
-    # Check if fonts are already installed
-    if fc-list | grep -i "meslo" | grep -i "nerd" >/dev/null 2>&1; then
+
+    skip_if_server "Nerd Fonts (terminal icon font)" && return 0
+
+    # macOS: install via Homebrew cask.
+    if is_macos; then
+        if ! command -v brew >/dev/null 2>&1; then
+            die "Homebrew required. Install from https://brew.sh"
+        fi
+        printf "%bInstalling MesloLGS Nerd Font via brew cask...%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        brew install --cask font-meslo-lg-nerd-font || \
+            printf "%bFont install failed; you may need: brew tap homebrew/cask-fonts%b\n" "${C_YELLOW}" "${C_DEFAULT}"
+        return 0
+    fi
+
+    # Check if fonts are already installed (Linux)
+    if command -v fc-list >/dev/null 2>&1 && fc-list | grep -i "meslo" | grep -i "nerd" >/dev/null 2>&1; then
         printf "%bNerd Fonts (MesloLGS) appear to be already installed%b\n" "${C_GREEN}" "${C_DEFAULT}"
         if ! confirm "Do you want to reinstall?"; then
             return
         fi
     fi
-    
+
     mkdir -p "$HOME/.local/share/fonts"
     
     # Download font files

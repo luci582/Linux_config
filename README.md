@@ -1,177 +1,171 @@
-# Linux Development Environment Setup
+# Cross-Platform Development Environment Setup
 
-A comprehensive, multi-distribution Linux development environment setup script with support for Ubuntu and Debian.
+A modular setup script for Ubuntu, Debian, and macOS. Supports **desktop** (full workstation) and **server** (headless, no GUI apps) install modes.
 
-## 🚀 Features
+## Features
 
-- **Multi-Distribution Support**: Automatically detects Ubuntu or Debian and runs the appropriate script
-- **Organized Structure**: Clean directory organization with modular components
-- **Comprehensive Tools**: Installs development tools, editors, virtualization, and productivity software
-- **Interactive Menu**: User-friendly menu system for selective installation
-- **Backup System**: Automatically backs up existing configurations
+- **Multi-OS**: Auto-detects Ubuntu, Debian (and derivatives via `ID_LIKE`), and macOS
+- **Two install modes**:
+  - `--desktop` (default): full workstation — editors, terminals, GUI apps, virtualization
+  - `--server`: headless — no GUI apps, no snap/cask GUI packages, no ghostty, no GNOME extensions, no virt-manager, Nerd Fonts skipped, Docker runs via Colima on macOS
+- **Homebrew on macOS** (installs Homebrew automatically if missing)
+- **apt on Debian/Ubuntu**
+- **Interactive menu** with full install or granular steps
+- **Installation status check** built-in
+- **Non-root enforced**
 
-## 📁 Directory Structure
+## Quick Start
+
+```bash
+git clone https://github.com/luci582/Linux_config.git ~/linux_config
+cd ~/linux_config
+chmod +x setup.sh
+
+# Full desktop install (default)
+./setup.sh
+
+# Server / headless install
+./setup.sh --server
+```
+
+Equivalent env-var invocation:
+
+```bash
+INSTALL_MODE=server ./setup.sh
+```
+
+## What Gets Installed
+
+| Component | Desktop | Server | Linux | macOS |
+|---|---|---|---|---|
+| Core CLI (git, curl, tmux, zsh, htop, fzf, bat, btop, neofetch, thefuck) | ✅ | ✅ | ✅ | ✅ |
+| Build tools (cmake, gcc, pkg-config) | ✅ | ✅ | ✅ | ✅ |
+| Zsh + Oh My Zsh + Powerlevel10k + plugins | ✅ | ✅ | ✅ | ✅ |
+| Tmux + TPM | ✅ | ✅ | ✅ | ✅ |
+| Neovim + NvChad | ✅ | ✅ | ✅ (source build) | ✅ (brew) |
+| Rust + eza | ✅ | ✅ | ✅ | ✅ |
+| Docker | ✅ (engine / Desktop cask) | ✅ (engine / Colima) | ✅ | ✅ |
+| SSH server | optional | optional | ✅ (`openssh-server`) | ✅ (`systemsetup`) |
+| Nerd Fonts (MesloLGS) | ✅ | ❌ | ✅ | ✅ (cask) |
+| Ghostty config | ✅ | ❌ | ✅ | ✅ |
+| Snap GUI apps (VS Code, Obsidian, Discord, Wave) | ✅ | ❌ | ✅ | ❌ |
+| Homebrew Cask apps (VS Code, Obsidian, Ghostty) | ✅ | ❌ | ❌ | ✅ |
+| Virt-Manager + KVM/QEMU | ✅ | ❌ | ✅ | ❌ |
+| GNOME Shell extensions | ✅ | ❌ | ✅ (GNOME only) | ❌ |
+
+## Directory Structure
 
 ```
 linux_config/
-├── setup.sh                    # Main launcher script (run this)
+├── setup.sh                       # Main launcher (OS detection + mode flag)
 ├── scripts/
 │   ├── common/
-│   │   └── functions.sh        # Shared functions for both distros
+│   │   └── functions.sh           # Shared functions (Linux + macOS)
 │   └── distro/
-│       ├── ubuntu_setup.sh     # Ubuntu-specific setup
-│       └── debian_setup.sh     # Debian-specific setup
-├── dotfiles/                   # Your configuration files
+│       ├── ubuntu_setup.sh
+│       ├── debian_setup.sh
+│       └── macos_setup.sh         # NEW
+├── dotfiles/
 │   ├── .zshrc
+│   ├── .bashrc
 │   ├── .tmux.conf
 │   ├── .p10k.zsh
-│   └── config                  # Ghostty config
-└── README.md                   # This file
+│   └── config                     # Ghostty (desktop only)
+└── README.md
 ```
 
-## 🎯 What Gets Installed
+## CLI Options
 
-### Core Development Tools
-- Build essentials (gcc, cmake, pkg-config, etc.)
-- Git, curl, wget, tree, unzip
-- Development libraries and headers
+```
+Usage: ./setup.sh [--server | --desktop] [--help]
 
-### Terminal & Productivity
-- **Zsh** with Oh My Zsh and Powerlevel10k theme
-- **Tmux** with TPM (Tmux Plugin Manager)
-- **Neovim** (built from source) with NvChad configuration
-- **Nerd Fonts** (MesloLGS for terminal icons)
-- Modern CLI tools: bat, btop, htop, neofetch, fzf, thefuck
+Options:
+  --server     Headless / server install (no GUI apps).
+  --desktop    Full workstation install (default).
+  -h, --help   Show help.
 
-### Development Environment
-- **Rust** (via rustup) with eza (modern ls replacement)
-- **Docker** with docker-compose
-- **Virt-Manager** with KVM/QEMU for virtualization
+Environment overrides:
+  INSTALL_MODE=server|desktop       Same as the matching flag.
+  FORCE_DISTRO=ubuntu|debian|macos  Skip auto-detection (CI use).
+```
 
-### Applications
-- **Snap packages**: VS Code, Discord, Obsidian, Wave Terminal
-- **OpenVPN3** client
-- **SSH Server** (optional)
-- **Remote Desktop**: FreeRDP client
+## Menu Options
 
-## 🚀 Quick Start
+Same across all three OS scripts (macOS omits Linux-only items):
 
-1. **Clone or download this repository**:
-   ```bash
-   git clone <repository-url> ~/linux_config
-   cd ~/linux_config
-   ```
+1. **Run Full Installation** — all steps for the current mode
+2. **Update System** — `apt full-upgrade` on Linux / `brew update && upgrade` on macOS
+3. **Install Core Tools**
+4. **Setup Zsh & Oh My Zsh**
+5. **Install Neovim & NvChad**
+6. **Install Nerd Fonts** (skipped in server mode)
+7. **Copy Dotfiles**
+8. **Setup Rust Environment**
+9. **Install Docker**
+10. **Install SSH Server** (Linux: `openssh-server`; macOS: `systemsetup -setremotelogin on`)
+11. **Install Virt-Manager** *(Linux only, desktop only)*
+12. **Install Snap Packages** *(Linux only, desktop only)*
+13. **Install GNOME Extensions** *(Linux GNOME only, desktop only)*
+14. **Update GNOME Extensions** *(Linux GNOME only, desktop only)*
+- `c` Check Installation Status
+- `s` Show System Information
+- `q` Quit
 
-2. **Make the main script executable**:
-   ```bash
-   chmod +x setup.sh
-   ```
+## Customization
 
-3. **Run the setup**:
-   ```bash
-   ./setup.sh
-   ```
+### Dotfiles
 
-The script will automatically detect your OS (Ubuntu/Debian) and present you with an interactive menu.
+Edit files in `dotfiles/` before running `./setup.sh` option 7.
 
-## 📋 Menu Options
+### Package Lists
 
-1. **Run Full Installation**: Installs everything automatically
-2. **Update System Packages**: Updates all system packages
-3. **Install Core Tools**: Essential development tools and libraries
-4. **Setup Zsh & Oh My Zsh**: Terminal shell and theme setup
-5. **Install Neovim & NvChad**: Modern text editor with configuration
-6. **Install Nerd Fonts**: Fonts with icon support
-7. **Copy Dotfiles**: Copies your configuration files
-8. **Setup Rust Environment**: Rust programming language and tools
-9. **Install OpenVPN3**: VPN client
-10. **Install Docker**: Container platform
-11. **Install SSH Server**: Remote access server
-12. **Install Virt-Manager**: Virtualization management
-13. **Install Snap Packages**: Modern applications
-**c. Check Installation Status**: Comprehensive status check of all components
+- Ubuntu: `scripts/distro/ubuntu_setup.sh` → `install_core_tools()`
+- Debian: `scripts/distro/debian_setup.sh` → `install_core_tools()`
+- macOS:  `scripts/distro/macos_setup.sh`  → `install_core_tools()` (edit `core_formulae` / `casks` arrays)
+- Shared: `scripts/common/functions.sh`
 
-## 🔧 Customization
+## Requirements
 
-### Adding Your Dotfiles
-Place your configuration files in the `dotfiles/` directory:
-- `.zshrc` - Zsh configuration
-- `.tmux.conf` - Tmux configuration  
-- `.p10k.zsh` - Powerlevel10k theme configuration
-- `config` - Ghostty terminal configuration
+- **Linux**: Ubuntu 18.04+ or Debian 10+ (or `ID_LIKE=debian` derivative), `sudo`, internet
+- **macOS**: 12+, Xcode Command Line Tools (`xcode-select --install`), internet
+- Regular user account (scripts refuse to run as root)
+- ~2 GB free disk space
 
-### Modifying Package Lists
-Edit the respective distro files:
-- `scripts/distro/ubuntu_setup.sh` for Ubuntu-specific packages
-- `scripts/distro/debian_setup.sh` for Debian-specific packages
-- `scripts/common/functions.sh` for shared functionality
+## Troubleshooting
 
-## � Installation Status Checker
+### macOS: Homebrew install fails
+Install manually from https://brew.sh, then re-run `./setup.sh`.
 
-The new **Check Installation Status** feature provides a comprehensive overview of your development environment:
+### macOS: nerd font cask fails
+```bash
+brew tap homebrew/cask-fonts
+brew install --cask font-meslo-lg-nerd-font
+```
 
-- ✅ **Detailed Component Check**: Verifies installation of all major components
-- 📊 **Progress Tracking**: Shows completion percentage and summary statistics  
-- 🎯 **Version Information**: Displays version numbers for installed tools
-- 🚦 **Status Indicators**: 
-  - ✓ Fully installed and working
-  - ◐ Installed but not running/configured
-  - ✗ Missing or not installed
-- 📈 **Smart Recommendations**: Suggests next steps based on completion status
-
-Use option `c` in any menu to run the comprehensive status check.
-
-## �🛠️ Distribution Differences
-
-### Ubuntu Features
-- Uses Ubuntu-specific repositories for Docker and OpenVPN3
-- Optimized package selections for Ubuntu
-- Better snap package support
-
-### Debian Features  
-- Uses Debian-specific repositories
-- Enhanced SSH server conflict resolution
-- Debian-optimized package management
-
-## 🔒 Security & Safety
-
-- **Never runs as root**: Script checks and prevents root execution
-- **Backup system**: Automatically backs up existing configurations
-- **Confirmation prompts**: Asks before making significant changes
-- **Error handling**: Comprehensive error checking and reporting
-
-## 🐛 Troubleshooting
-
-### SSH Package Conflicts (Debian)
-If you encounter SSH package conflicts on Debian, the script includes automatic resolution. If automatic resolution fails, manually run:
+### Linux: SSH package conflicts on Debian
+Scripts attempt auto-resolution. Manual fallback:
 ```bash
 sudo apt remove --purge openssh-client openssh-server
 sudo apt autoremove
 sudo apt install openssh-server openssh-client
 ```
 
-### Permission Issues
-If you get permission errors:
+### Permissions
 ```bash
 chmod +x setup.sh
-chmod +x scripts/distro/*.sh
-chmod +x scripts/common/functions.sh
+chmod +x scripts/distro/*.sh scripts/common/*.sh
 ```
 
-### Docker Permission
-After Docker installation, you may need to log out and back in to use Docker without sudo.
+### Docker without sudo (Linux)
+Log out and back in after install to pick up the `docker` group.
 
-## 📝 Requirements
+## Security
 
-- Ubuntu 18.04+ or Debian 10+
-- Internet connection for package downloads
-- At least 2GB free disk space
-- Regular user account with sudo privileges
+- Never runs as root
+- Backs up existing dotfiles with `.bak.<timestamp>` before overwriting
+- Confirmation prompts before destructive changes
+- Explicit error handling throughout
 
-## 🤝 Contributing
+## License
 
-Feel free to submit issues, fork the repository, and create pull requests for any improvements.
-
-## 📄 License
-
-This project is open source and available under the MIT License.
+MIT

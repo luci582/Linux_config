@@ -70,12 +70,14 @@ install_ssh_server() {
 }
 
 install_gnome_extensions() {
+    skip_if_server "GNOME extensions (GUI)" && return 0
+
     # Check if GNOME is running
     if [ "${XDG_CURRENT_DESKTOP:-}" != "GNOME" ] && [ "${GDMSESSION:-}" != "gnome" ] && ! pgrep -x gnome-shell >/dev/null 2>&1; then
         printf "%bGNOME not detected. Skipping GNOME extensions installation.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         return 0
     fi
-    
+
     print_header "Installing GNOME Extensions"
     printf "%bGNOME detected. Installing extensions...%b\n" "${C_GREEN}" "${C_DEFAULT}"
     
@@ -125,12 +127,14 @@ install_gnome_extensions() {
 }
 
 update_gnome_extensions() {
+    skip_if_server "GNOME extensions update (GUI)" && return 0
+
     # Check if GNOME is running
     if [ "${XDG_CURRENT_DESKTOP:-}" != "GNOME" ] && [ "${GDMSESSION:-}" != "gnome" ] && ! pgrep -x gnome-shell >/dev/null 2>&1; then
         printf "%bGNOME not detected. Skipping GNOME extensions update.%b\n" "${C_YELLOW}" "${C_DEFAULT}"
         return 0
     fi
-    
+
     print_header "Updating GNOME Extensions"
     printf "%bGNOME detected. Updating extensions...%b\n" "${C_GREEN}" "${C_DEFAULT}"
     
@@ -189,7 +193,7 @@ update_gnome_extensions() {
 
 # --- Menu System ---
 show_menu() {
-    printf "\n%b--- Ubuntu Setup Menu ---%b\n" "${C_GREEN}${C_BOLD}" "${C_DEFAULT}"
+    printf "\n%b--- Ubuntu Setup Menu (%s mode) ---%b\n" "${C_GREEN}${C_BOLD}" "$INSTALL_MODE" "${C_DEFAULT}"
     echo "1.  Run Full Installation (All Steps)"
     echo "2.  Update System Packages Only"
     echo "3.  Install Core Tools Only"
